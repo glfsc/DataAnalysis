@@ -1,0 +1,57 @@
+# ============================================
+# DataVision Pro - .gitignore
+# ============================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual Environment
+venv/
+env/
+.venv/
+*.conda/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Uploads & Runtime
+uploads/
+*.log
+app.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Claude
+.claude/
+
+# Test / Temp
+tmp/
+temp/
+*.tmp

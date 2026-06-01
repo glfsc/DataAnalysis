@@ -1,0 +1,118 @@
+/* ============================================
+   DataVision Pro - 玻璃拟态效果
+   赛博霓虹科技风 · 毛玻璃质感
+   ============================================ */
+
+/* 基础玻璃卡片 */
+.glass-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.glass-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1.5px;
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(99, 102, 241, 0.4),
+        rgba(139, 92, 246, 0.3),
+        transparent
+    );
+    z-index: 2; pointer-events: none;
+}
+
+.glass-card::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.03),
+        transparent 60%
+    );
+    border-radius: calc(var(--radius) - 1px);
+    pointer-events: none; z-index: 1;
+}
+
+/* 深色玻璃变体 */
+.glass-card-dark {
+    background: rgba(10, 10, 30, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(100, 100, 255, 0.1);
+    border-radius: var(--radius);
+}
+
+/* 霓虹玻璃变体 */
+.glass-card-neon {
+    background: linear-gradient(135deg,
+        rgba(99, 102, 241, 0.08),
+        rgba(139, 92, 246, 0.04)
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(99, 102, 241, 0.18);
+    border-radius: var(--radius);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.08);
+    transition: all 0.3s ease;
+}
+
+.glass-card-neon:hover {
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.18);
+}
+
+/* 粉色玻璃变体 */
+.glass-card-pink {
+    background: linear-gradient(135deg,
+        rgba(236, 72, 153, 0.08),
+        rgba(139, 92, 246, 0.04)
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(236, 72, 153, 0.18);
+    border-radius: var(--radius);
+    box-shadow: 0 0 20px rgba(236, 72, 153, 0.06);
+    transition: all 0.3s ease;
+}
+
+.glass-card-pink:hover {
+    border-color: rgba(236, 72, 153, 0.35);
+    box-shadow: 0 0 30px rgba(236, 72, 153, 0.15);
+}
+
+/* 青蓝玻璃变体 */
+.glass-card-cyan {
+    background: linear-gradient(135deg,
+        rgba(56, 189, 248, 0.08),
+        rgba(99, 102, 241, 0.04)
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    border-radius: var(--radius);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.06);
+    transition: all 0.3s ease;
+}
+
+.glass-card-cyan:hover {
+    border-color: rgba(56, 189, 248, 0.35);
+    box-shadow: 0 0 30px rgba(56, 189, 248, 0.15);
+}
+
+/* 上传区域玻璃效果 */
+.upload-dropzone {
+    background: linear-gradient(135deg,
+        rgba(99, 102, 241, 0.04),
+        rgba(139, 92, 246, 0.03)
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
