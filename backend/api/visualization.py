@@ -78,6 +78,7 @@ async def create_visualization(request: GenerateChartRequest, db: Session = Depe
             config=result.get("echarts_option", {}),
         )
         db.add(chart_record)
+        db.commit()
 
         return result
 

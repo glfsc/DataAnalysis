@@ -2,7 +2,7 @@
 数据分析API路由
 """
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -25,7 +25,15 @@ class AnalysisRequest(BaseModel):
     group_column: Optional[str] = None
     target: Optional[str] = None
     features: Optional[List[str]] = None
-    n_clusters: int = Field(3, ge=1, le=10)
+    n_clusters: int = Field(3, ge=1, le=20)
+
+
+class ClusterRequest(BaseModel):
+    file_id: str
+    algorithms: List[str] = Field(default=["kmeans"], description="聚类算法列表: kmeans/kmedoids/optics/agnes/gmm")
+    features: Optional[List[str]] = None
+    n_clusters: int = Field(3, ge=1, le=20)
+    params: Optional[Dict[str, Any]] = Field(default=None, description="各算法的参数字典")
 
 
 def _load_df(file_id: str, db: Session):
@@ -85,9 +93,9 @@ async def groupby_analysis(request: AnalysisRequest, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"分组聚合失败: {str(e)}")
 
 
-@router.post("/cluster", summary="K-Means聚类")
-async def cluster_analysis(request: AnalysisRequest, db: Session = Depends(get_db)):
-    """使用K-Means算法进行聚类分析"""
+@router.post("/cluster", summary="多算法聚类对比分析")
+async def cluster_analysis(request: ClusterRequest, db: Session = Depends(get_db)):
+    """使用多种聚类算法进行对比分析：K-Means、K-Medoids、OPTICS、AGNES、GMM"""
     df = _load_df(request.file_id, db)
 
     features = request.features or df.select_dtypes(include=["number"]).columns.tolist()
@@ -95,13 +103,36 @@ async def cluster_analysis(request: AnalysisRequest, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="需要至少2个数值列才能聚类")
 
     df_numeric = df[features].dropna()
-    if len(df_numeric) < request.n_clusters:
-        raise HTTPException(status_code=400, detail=f"有效数据行数({len(df_numeric)})少于聚类数({request.n_clusters})")
+    n_clusters = request.n_clusters
+
+    # 根据算法设置合理的最小数据量
+    min_required = n_clusters  # K-Means/K-Medoids/AGNES/GMM 至少需要 n_clusters 个样本
+    for algo in request.algorithms:
+        if algo == "optics":
+            min_samples_param = (request.params or {}).get("optics", {}).get("min_samples", 5)
+            min_required = max(min_required, min_samples_param)
+
+    if len(df_numeric) < min_required:
+        raise HTTPException(status_code=400, detail=f"有效数据行数({len(df_numeric)})少于最小要求({min_required})")
+
+    # 验证算法
+    valid_algorithms = {"kmeans", "kmedoids", "optics", "agnes", "gmm"}
+    selected = [a for a in request.algorithms if a in valid_algorithms]
+    if not selected:
+        raise HTTPException(status_code=400, detail=f"请选择至少一个有效算法: {', '.join(valid_algorithms)}")
 
     try:
-        result = MLService.kmeans_clustering(df_numeric, features, request.n_clusters, True)
+        result = MLService.multi_clustering(
+            df_numeric,
+            features,
+            algorithms=selected,
+            params=request.params or {"n_clusters": n_clusters},
+        )
+        logger.info(f"聚类完成: algorithms={selected}, comparison_count={len(result.get('comparison',[]))}")
         return {"file_id": request.file_id, "cluster_result": result}
     except Exception as e:
+        import traceback
+        logger.error(f"聚类分析失败: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"聚类分析失败: {str(e)}")
 
 
@@ -140,6 +171,9 @@ async def anomaly_detection(request: AnalysisRequest, db: Session = Depends(get_
 
     try:
         result = MLService.anomaly_detection(df, features)
+        logger.info(f"异常检测完成: anomaly_count={result.get('anomaly_count',0)}, rows_returned={len(result.get('anomaly_rows',[]))}")
         return {"file_id": request.file_id, "anomaly_result": result}
     except Exception as e:
+        import traceback
+        logger.error(f"异常检测失败: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"异常检测失败: {str(e)}")

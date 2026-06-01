@@ -1,18 +1,19 @@
 """
 机器学习服务
-提供K-Means聚类、线性回归、异常检测、关联规则和时间序列预测
+提供K-Means、K-Medoids、OPTICS、AGNES、GMM聚类，线性回归、异常检测、关联规则和时间序列预测
 """
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, OPTICS, AgglomerativeClustering
+from sklearn.mixture import GaussianMixture
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import mean_squared_error, r2_score, silhouette_score
+from sklearn.metrics import mean_squared_error, r2_score, silhouette_score, calinski_harabasz_score, davies_bouldin_score
 from sklearn.decomposition import PCA
 from itertools import combinations
 
@@ -117,6 +118,546 @@ class MLService:
             "silhouette_score": round(silhouette, 4) if silhouette else None,
             "features": valid_features,
             "scatter_data": scatter_data,
+        }
+
+    @staticmethod
+    def _euclidean_cdist(XA, XB):
+        """纯 numpy 欧几里得距离矩阵，不依赖 scipy"""
+        XA_sq = np.sum(XA**2, axis=1, keepdims=True)  # (n, 1)
+        XB_sq = np.sum(XB**2, axis=1, keepdims=True)  # (m, 1)
+        dist_sq = XA_sq + XB_sq.T - 2 * np.dot(XA, XB.T)
+        dist_sq = np.maximum(dist_sq, 0)
+        return np.sqrt(dist_sq)
+
+    @classmethod
+    def kmedoids_clustering(
+        cls,
+        df: pd.DataFrame,
+        features: List[str],
+        n_clusters: int = 3,
+        max_iter: int = 100,
+        scale_data: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        K-Medoids (PAM) 聚类分析 — 使用实际数据点作为簇中心，对异常值更鲁棒
+        """
+        valid_features = [f for f in features if f in df.columns]
+        if len(valid_features) < 2:
+            raise ValueError("至少需要2个有效特征列进行聚类")
+
+        X = df[valid_features].copy()
+        for col in X.columns:
+            if not pd.api.types.is_numeric_dtype(X[col]):
+                le = LabelEncoder()
+                X[col] = le.fit_transform(X[col].astype(str))
+        X = X.dropna()
+
+        if len(X) < n_clusters:
+            raise ValueError(f"有效数据量({len(X)})小于聚类数量({n_clusters})")
+
+        scaler = StandardScaler() if scale_data else None
+        X_scaled = scaler.fit_transform(X) if scale_data else X.values
+        n_samples = len(X_scaled)
+
+        # 随机初始化 medoids
+        rng = np.random.RandomState(42)
+        medoid_indices = rng.choice(n_samples, min(n_clusters, n_samples), replace=False).tolist()
+        actual_k = len(medoid_indices)
+        labels = np.zeros(n_samples, dtype=int)
+
+        for _iter in range(max_iter):
+            distances = cls._euclidean_cdist(X_scaled, X_scaled[medoid_indices])
+            new_labels = np.argmin(distances, axis=1)
+
+            new_medoid_indices = []
+            for k in range(actual_k):
+                cluster_mask = new_labels == k
+                if cluster_mask.sum() == 0:
+                    new_medoid_indices.append(medoid_indices[k])
+                    continue
+                cluster_points = X_scaled[cluster_mask]
+                cluster_indices = np.where(cluster_mask)[0]
+                intra_distances = cls._euclidean_cdist(cluster_points, cluster_points).sum(axis=1)
+                best_local_idx = np.argmin(intra_distances)
+                new_medoid_indices.append(int(cluster_indices[best_local_idx]))
+
+            if set(new_medoid_indices) == set(medoid_indices):
+                labels = new_labels
+                break
+            medoid_indices = new_medoid_indices
+            labels = new_labels
+
+        cluster_sizes = {int(i): int((labels == i).sum()) for i in range(actual_k)}
+        silhouette = None
+        if actual_k > 1 and len(set(labels)) > 1:
+            try:
+                sample_size = min(5000, n_samples)
+                if n_samples > sample_size:
+                    idx_sample = rng.choice(n_samples, sample_size, replace=False)
+                    silhouette = float(silhouette_score(X_scaled[idx_sample], labels[idx_sample]))
+                else:
+                    silhouette = float(silhouette_score(X_scaled, labels))
+            except Exception:
+                silhouette = None
+
+        calinski = None
+        try:
+            if actual_k > 1 and len(set(labels)) > 1:
+                calinski = float(calinski_harabasz_score(X_scaled, labels))
+        except Exception:
+            pass
+
+        davies = None
+        try:
+            if actual_k > 1 and len(set(labels)) > 1:
+                davies = float(davies_bouldin_score(X_scaled, labels))
+        except Exception:
+            pass
+
+        centers_raw = X_scaled[medoid_indices]
+        if scale_data:
+            centers_raw = scaler.inverse_transform(centers_raw)
+        cluster_centers = [
+            {valid_features[j]: round(float(centers_raw[i][j]), 4) for j in range(len(valid_features))}
+            for i in range(actual_k)
+        ]
+
+        pca = PCA(n_components=2)
+        pca_result = pca.fit_transform(X_scaled)
+        scatter_data = {
+            "x": pca_result[:, 0].tolist(),
+            "y": pca_result[:, 1].tolist(),
+            "labels": labels.tolist(),
+            "pca_variance_ratio": [round(float(v), 4) for v in pca.explained_variance_ratio_],
+        }
+
+        total_distance = float(cls._euclidean_cdist(X_scaled, X_scaled[medoid_indices]).min(axis=1).sum())
+
+        return {
+            "algorithm": "K-Medoids (PAM)",
+            "n_clusters": actual_k,
+            "cluster_labels": labels.tolist(),
+            "cluster_centers": cluster_centers,
+            "cluster_sizes": cluster_sizes,
+            "silhouette_score": round(silhouette, 4) if silhouette else None,
+            "calinski_harabasz_score": round(calinski, 4) if calinski else None,
+            "davies_bouldin_score": round(davies, 4) if davies else None,
+            "total_distance": round(total_distance, 4),
+            "features": valid_features,
+            "scatter_data": scatter_data,
+        }
+
+    @classmethod
+    def optics_clustering(
+        cls,
+        df: pd.DataFrame,
+        features: List[str],
+        min_samples: int = 5,
+        xi: float = 0.05,
+        scale_data: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        OPTICS 聚类分析 — 基于密度的聚类，自动发现不同密度的簇
+
+        Args:
+            df: DataFrame对象
+            features: 特征列名列表
+            min_samples: 最小样本数
+            xi: 簇提取阈值
+            scale_data: 是否标准化
+
+        Returns:
+            聚类结果字典
+        """
+        valid_features = [f for f in features if f in df.columns]
+        if len(valid_features) < 2:
+            raise ValueError("至少需要2个有效特征列进行聚类")
+
+        X = df[valid_features].copy()
+        for col in X.columns:
+            if not pd.api.types.is_numeric_dtype(X[col]):
+                le = LabelEncoder()
+                X[col] = le.fit_transform(X[col].astype(str))
+        X = X.dropna()
+
+        if len(X) < min_samples:
+            raise ValueError(f"有效数据量({len(X)})小于最小样本数({min_samples})")
+
+        scaler = StandardScaler() if scale_data else None
+        X_scaled = scaler.fit_transform(X) if scale_data else X.values
+
+        optics = OPTICS(min_samples=min_samples, xi=xi, min_cluster_size=min_samples)
+        labels = optics.fit_predict(X_scaled)
+
+        # OPTICS 标签中 -1 表示噪声
+        unique_labels = set(labels)
+        n_clusters = len(unique_labels - {-1})
+        n_noise = int((labels == -1).sum())
+
+        cluster_sizes = {}
+        for lb in unique_labels:
+            cluster_sizes[int(lb)] = int((labels == lb).sum())
+
+        silhouette = None
+        calinski = None
+        davies = None
+        if n_clusters > 1:
+            non_noise_mask = labels != -1
+            if non_noise_mask.sum() > n_clusters * 2:
+                try:
+                    silhouette = float(silhouette_score(X_scaled[non_noise_mask], labels[non_noise_mask]))
+                except Exception:
+                    pass
+                try:
+                    calinski = float(calinski_harabasz_score(X_scaled[non_noise_mask], labels[non_noise_mask]))
+                except Exception:
+                    pass
+                try:
+                    davies = float(davies_bouldin_score(X_scaled[non_noise_mask], labels[non_noise_mask]))
+                except Exception:
+                    pass
+
+        # 每簇中心
+        cluster_centers = []
+        for lb in sorted(unique_labels):
+            if lb == -1:
+                continue
+            mask = labels == lb
+            center = X_scaled[mask].mean(axis=0)
+            if scale_data:
+                center = scaler.inverse_transform(center.reshape(1, -1))[0]
+            cluster_centers.append({
+                "cluster": int(lb),
+                **{valid_features[j]: round(float(center[j]), 4) for j in range(len(valid_features))}
+            })
+
+        pca = PCA(n_components=2)
+        pca_result = pca.fit_transform(X_scaled)
+        scatter_data = {
+            "x": pca_result[:, 0].tolist(),
+            "y": pca_result[:, 1].tolist(),
+            "labels": labels.tolist(),
+            "pca_variance_ratio": [round(float(v), 4) for v in pca.explained_variance_ratio_],
+        }
+
+        reachability = optics.reachability_.tolist() if hasattr(optics, 'reachability_') and optics.reachability_ is not None else []
+        ordering = optics.ordering_.tolist() if hasattr(optics, 'ordering_') and optics.ordering_ is not None else []
+
+        return {
+            "algorithm": "OPTICS",
+            "n_clusters": n_clusters,
+            "n_noise": n_noise,
+            "cluster_labels": labels.tolist(),
+            "cluster_centers": cluster_centers,
+            "cluster_sizes": cluster_sizes,
+            "silhouette_score": round(silhouette, 4) if silhouette else None,
+            "calinski_harabasz_score": round(calinski, 4) if calinski else None,
+            "davies_bouldin_score": round(davies, 4) if davies else None,
+            "parameters": {"min_samples": min_samples, "xi": xi},
+            "features": valid_features,
+            "scatter_data": scatter_data,
+        }
+
+    @classmethod
+    def agnes_clustering(
+        cls,
+        df: pd.DataFrame,
+        features: List[str],
+        n_clusters: int = 3,
+        linkage: str = "ward",
+        scale_data: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        AGNES (Agglomerative Nesting) 层次聚类 — 自底向上合并
+
+        Args:
+            df: DataFrame对象
+            features: 特征列名列表
+            n_clusters: 聚类数量
+            linkage: 链接方式 (ward/complete/average/single)
+            scale_data: 是否标准化
+
+        Returns:
+            聚类结果字典
+        """
+        valid_features = [f for f in features if f in df.columns]
+        if len(valid_features) < 2:
+            raise ValueError("至少需要2个有效特征列进行聚类")
+
+        X = df[valid_features].copy()
+        for col in X.columns:
+            if not pd.api.types.is_numeric_dtype(X[col]):
+                le = LabelEncoder()
+                X[col] = le.fit_transform(X[col].astype(str))
+        X = X.dropna()
+
+        if len(X) < n_clusters:
+            raise ValueError(f"有效数据量({len(X)})小于聚类数量({n_clusters})")
+
+        scaler = StandardScaler() if scale_data else None
+        X_scaled = scaler.fit_transform(X) if scale_data else X.values
+
+        agnes = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
+        labels = agnes.fit_predict(X_scaled)
+
+        cluster_sizes = {int(i): int((labels == i).sum()) for i in range(n_clusters)}
+
+        silhouette = None
+        calinski = None
+        davies = None
+        if n_clusters > 1 and len(set(labels)) > 1:
+            try:
+                silhouette = float(silhouette_score(X_scaled, labels))
+            except Exception:
+                pass
+            try:
+                calinski = float(calinski_harabasz_score(X_scaled, labels))
+            except Exception:
+                pass
+            try:
+                davies = float(davies_bouldin_score(X_scaled, labels))
+            except Exception:
+                pass
+
+        cluster_centers = []
+        for i in range(n_clusters):
+            mask = labels == i
+            center = X_scaled[mask].mean(axis=0)
+            if scale_data:
+                center = scaler.inverse_transform(center.reshape(1, -1))[0]
+            cluster_centers.append({
+                **{valid_features[j]: round(float(center[j]), 4) for j in range(len(valid_features))}
+            })
+
+        pca = PCA(n_components=2)
+        pca_result = pca.fit_transform(X_scaled)
+        scatter_data = {
+            "x": pca_result[:, 0].tolist(),
+            "y": pca_result[:, 1].tolist(),
+            "labels": labels.tolist(),
+            "pca_variance_ratio": [round(float(v), 4) for v in pca.explained_variance_ratio_],
+        }
+
+        return {
+            "algorithm": f"AGNES ({linkage})",
+            "n_clusters": n_clusters,
+            "linkage": linkage,
+            "cluster_labels": labels.tolist(),
+            "cluster_centers": cluster_centers,
+            "cluster_sizes": cluster_sizes,
+            "silhouette_score": round(silhouette, 4) if silhouette else None,
+            "calinski_harabasz_score": round(calinski, 4) if calinski else None,
+            "davies_bouldin_score": round(davies, 4) if davies else None,
+            "features": valid_features,
+            "scatter_data": scatter_data,
+        }
+
+    @classmethod
+    def gmm_clustering(
+        cls,
+        df: pd.DataFrame,
+        features: List[str],
+        n_components: int = 3,
+        covariance_type: str = "full",
+        scale_data: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        高斯混合模型 (GMM) 聚类 — 软聚类，概率分配
+
+        Args:
+            df: DataFrame对象
+            features: 特征列名列表
+            n_components: 高斯成分数量
+            covariance_type: 协方差类型 (full/tied/diag/spherical)
+            scale_data: 是否标准化
+
+        Returns:
+            聚类结果字典
+        """
+        valid_features = [f for f in features if f in df.columns]
+        if len(valid_features) < 2:
+            raise ValueError("至少需要2个有效特征列进行聚类")
+
+        X = df[valid_features].copy()
+        for col in X.columns:
+            if not pd.api.types.is_numeric_dtype(X[col]):
+                le = LabelEncoder()
+                X[col] = le.fit_transform(X[col].astype(str))
+        X = X.dropna()
+
+        if len(X) < n_components:
+            raise ValueError(f"有效数据量({len(X)})小于成分数({n_components})")
+
+        scaler = StandardScaler() if scale_data else None
+        X_scaled = scaler.fit_transform(X) if scale_data else X.values
+
+        gmm = GaussianMixture(n_components=n_components, covariance_type=covariance_type, random_state=42)
+        labels = gmm.fit_predict(X_scaled)
+        probabilities = gmm.predict_proba(X_scaled)
+
+        cluster_sizes = {int(i): int((labels == i).sum()) for i in range(n_components)}
+
+        silhouette = None
+        calinski = None
+        davies = None
+        if n_components > 1 and len(set(labels)) > 1:
+            try:
+                silhouette = float(silhouette_score(X_scaled, labels))
+            except Exception:
+                pass
+            try:
+                calinski = float(calinski_harabasz_score(X_scaled, labels))
+            except Exception:
+                pass
+            try:
+                davies = float(davies_bouldin_score(X_scaled, labels))
+            except Exception:
+                pass
+
+        # GMM 均值作为簇中心
+        centers = gmm.means_
+        if scale_data:
+            centers = scaler.inverse_transform(centers)
+        cluster_centers = [
+            {valid_features[j]: round(float(centers[i][j]), 4) for j in range(len(valid_features))}
+            for i in range(n_components)
+        ]
+
+        # 权重
+        weights = [round(float(w), 4) for w in gmm.weights_]
+
+        pca = PCA(n_components=2)
+        pca_result = pca.fit_transform(X_scaled)
+        scatter_data = {
+            "x": pca_result[:, 0].tolist(),
+            "y": pca_result[:, 1].tolist(),
+            "labels": labels.tolist(),
+            "pca_variance_ratio": [round(float(v), 4) for v in pca.explained_variance_ratio_],
+        }
+
+        return {
+            "algorithm": f"GMM ({covariance_type})",
+            "n_components": n_components,
+            "covariance_type": covariance_type,
+            "cluster_labels": labels.tolist(),
+            "cluster_centers": cluster_centers,
+            "cluster_sizes": cluster_sizes,
+            "silhouette_score": round(silhouette, 4) if silhouette else None,
+            "calinski_harabasz_score": round(calinski, 4) if calinski else None,
+            "davies_bouldin_score": round(davies, 4) if davies else None,
+            "bic": round(float(gmm.bic(X_scaled)), 4),
+            "aic": round(float(gmm.aic(X_scaled)), 4),
+            "weights": weights,
+            "features": valid_features,
+            "scatter_data": scatter_data,
+        }
+
+    @classmethod
+    def multi_clustering(
+        cls,
+        df: pd.DataFrame,
+        features: List[str],
+        algorithms: List[str],
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        多算法聚类对比 — 运行选择的多种聚类算法并横向对比
+
+        Args:
+            df: DataFrame对象
+            features: 特征列名列表
+            algorithms: 算法列表 (kmeans/kmedoids/optics/agnes/gmm)
+            params: 各算法参数
+
+        Returns:
+            对比结果
+        """
+        params = params or {}
+        results = {}
+        comparison = []
+
+        algo_map = {
+            "kmeans": ("K-Means", cls.kmeans_clustering),
+            "kmedoids": ("K-Medoids (PAM)", cls.kmedoids_clustering),
+            "optics": ("OPTICS", cls.optics_clustering),
+            "agnes": ("AGNES 层次聚类", cls.agnes_clustering),
+            "gmm": ("GMM 高斯混合", cls.gmm_clustering),
+        }
+
+        for algo_key in algorithms:
+            if algo_key not in algo_map:
+                continue
+            algo_name, algo_func = algo_map[algo_key]
+            try:
+                algo_params = params.get(algo_key, {})
+                # 为不同算法设置默认参数
+                if algo_key == "kmeans":
+                    algo_params.setdefault("n_clusters", params.get("n_clusters", 3))
+                elif algo_key == "kmedoids":
+                    algo_params.setdefault("n_clusters", params.get("n_clusters", 3))
+                elif algo_key == "optics":
+                    algo_params.setdefault("min_samples", 5)
+                elif algo_key == "agnes":
+                    algo_params.setdefault("n_clusters", params.get("n_clusters", 3))
+                    algo_params.setdefault("linkage", "ward")
+                elif algo_key == "gmm":
+                    algo_params.setdefault("n_components", params.get("n_clusters", 3))
+                    algo_params.setdefault("covariance_type", "full")
+
+                result = algo_func(df, features, **algo_params)
+                results[algo_key] = result
+
+                # 构建对比行
+                row = {
+                    "algorithm": algo_name,
+                    "key": algo_key,
+                    "n_clusters": result.get("n_clusters", result.get("n_components", "auto")),
+                    "silhouette_score": result.get("silhouette_score"),
+                    "calinski_harabasz_score": result.get("calinski_harabasz_score"),
+                    "davies_bouldin_score": result.get("davies_bouldin_score"),
+                }
+                # 算法特有指标
+                if algo_key == "kmeans":
+                    row["inertia"] = result.get("inertia")
+                elif algo_key == "kmedoids":
+                    row["total_distance"] = result.get("total_distance")
+                elif algo_key == "optics":
+                    row["n_noise"] = result.get("n_noise")
+                elif algo_key == "gmm":
+                    row["bic"] = result.get("bic")
+                    row["aic"] = result.get("aic")
+                comparison.append(row)
+            except Exception as e:
+                logger.warning(f"算法 {algo_name} 执行失败: {str(e)}")
+                comparison.append({
+                    "algorithm": algo_name,
+                    "key": algo_key,
+                    "error": str(e),
+                })
+
+        # 评估总结
+        best_silhouette = None
+        best_calinski = None
+        best_davies = None  # Davies-Bouldin 越小越好
+        for c in comparison:
+            if c.get("silhouette_score") is not None:
+                if best_silhouette is None or c["silhouette_score"] > comparison[best_silhouette].get("silhouette_score", -1):
+                    best_silhouette = comparison.index(c)
+            if c.get("calinski_harabasz_score") is not None:
+                if best_calinski is None or c["calinski_harabasz_score"] > comparison[best_calinski].get("calinski_harabasz_score", -1):
+                    best_calinski = comparison.index(c)
+            if c.get("davies_bouldin_score") is not None:
+                if best_davies is None or c["davies_bouldin_score"] < comparison[best_davies].get("davies_bouldin_score", float('inf')):
+                    best_davies = comparison.index(c)
+
+        return {
+            "algorithms_run": algorithms,
+            "comparison": comparison,
+            "results": results,
+            "features": features,
+            "best_by_silhouette": comparison[best_silhouette]["algorithm"] if best_silhouette is not None else None,
+            "best_by_calinski_harabasz": comparison[best_calinski]["algorithm"] if best_calinski is not None else None,
+            "best_by_davies_bouldin": comparison[best_davies]["algorithm"] if best_davies is not None else None,
         }
 
     @classmethod
@@ -231,7 +772,7 @@ class MLService:
             contamination: 预期异常比例
 
         Returns:
-            异常检测结果
+            异常检测结果（含异常行完整数据）
         """
         if features is None:
             features = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -245,7 +786,11 @@ class MLService:
                 le = LabelEncoder()
                 data[col] = le.fit_transform(data[col].astype(str))
 
+        # 保留原始行索引
+        original_indices = data.index.tolist()
         data = data.dropna()
+        # 更新索引映射
+        clean_indices = data.index.tolist()
 
         if len(data) < 10:
             return {"error": "数据量不足", "anomalies": [], "anomaly_count": 0}
@@ -259,35 +804,72 @@ class MLService:
         predictions = model.fit_predict(data.values)
 
         # -1 表示异常，1 表示正常
-        anomaly_indices = np.where(predictions == -1)[0].tolist()
+        anomaly_mask = predictions == -1
+        anomaly_positions = np.where(anomaly_mask)[0].tolist()
+        anomaly_indices = [clean_indices[i] for i in anomaly_positions]
         anomaly_scores = model.decision_function(data.values)
-        # 转换为异常分数（越高越异常）
         normalized_scores = (-anomaly_scores + anomaly_scores.max()) / (
             anomaly_scores.max() - anomaly_scores.min() + 1e-10
         )
 
-        # 识别异常值较多的列
-        col_anomaly_count = {}
-        for i, col in enumerate(valid_features):
+        # 构建每列的 IQR 异常范围
+        col_iqr_bounds = {}
+        for col in valid_features:
             col_data = data[col]
             if pd.api.types.is_numeric_dtype(col_data):
-                Q1 = col_data.quantile(0.25)
-                Q3 = col_data.quantile(0.75)
+                Q1 = float(col_data.quantile(0.25))
+                Q3 = float(col_data.quantile(0.75))
                 IQR = Q3 - Q1
                 lower = Q1 - 1.5 * IQR
                 upper = Q3 + 1.5 * IQR
-                col_anomaly_count[col] = int(
-                    ((col_data < lower) | (col_data > upper)).sum()
-                )
+                col_iqr_bounds[col] = {"Q1": round(Q1, 4), "Q3": round(Q3, 4), "IQR": round(IQR, 4), "lower": round(lower, 4), "upper": round(upper, 4)}
+
+        # 构建异常行详情（限前100条）
+        anomaly_rows = []
+        all_columns = df.columns.tolist()
+        for i, pos in enumerate(anomaly_positions[:100]):
+            orig_idx = clean_indices[pos]
+            row_data = {}
+            # 获取原始 df 中该行的所有列数据
+            for col in all_columns:
+                val = df.loc[orig_idx, col]
+                if hasattr(val, 'item'):
+                    val = val.item()
+                elif isinstance(val, float) and (pd.isna(val) or np.isinf(val)):
+                    val = None
+                row_data[col] = val
+
+            # 找出该行中哪些值在 IQR 范围外
+            outlier_columns = []
+            for col in valid_features:
+                if col in col_iqr_bounds:
+                    v = data.loc[orig_idx, col]
+                    bounds = col_iqr_bounds[col]
+                    if pd.notna(v) and (v < bounds["lower"] or v > bounds["upper"]):
+                        outlier_columns.append({
+                            "column": col,
+                            "value": round(float(v), 4) if not (isinstance(v, float) and np.isnan(v)) else None,
+                            "lower_bound": bounds["lower"],
+                            "upper_bound": bounds["upper"],
+                        })
+
+            anomaly_rows.append({
+                "index": int(orig_idx),
+                "score": round(float(normalized_scores[pos]), 4),
+                "data": row_data,
+                "outlier_columns": outlier_columns,
+            })
 
         return {
-            "anomaly_indices": anomaly_indices,
+            "anomaly_indices": [int(x) for x in anomaly_indices],
             "anomaly_count": len(anomaly_indices),
             "total_samples": len(data),
             "anomaly_ratio": round(len(anomaly_indices) / len(data) * 100, 2),
             "anomaly_scores": [round(float(s), 4) for s in normalized_scores.tolist()],
             "predictions": predictions.tolist(),
             "features": valid_features,
+            "anomaly_rows": anomaly_rows,
+            "col_iqr_bounds": col_iqr_bounds,
         }
 
     @classmethod

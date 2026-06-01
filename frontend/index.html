@@ -1,456 +1,216 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="DataVision Pro - 交互式数据分析系统">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DataVision Pro - 交互式数据分析系统</title>
-    <link rel="stylesheet" href="/css/style.css">
-    <link rel="stylesheet" href="/css/glassmorphism.css">
-    <link rel="stylesheet" href="/css/animations.css">
+    <link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/glassmorphism.css"><link rel="stylesheet" href="/css/animations.css">
     <script src="/lib/echarts.min.js"></script>
 </head>
 <body>
-    <!-- 粒子背景 -->
-    <div class="particle-bg" id="particleBg">
-        <canvas id="particleCanvas"></canvas>
-    </div>
 
-    <!-- ========== 顶部导航栏 ========== -->
-    <header class="topbar" role="banner">
-        <div class="topbar-left">
-            <div class="logo">
-                <svg class="logo-svg" viewBox="0 0 32 32" width="28" height="28">
-                    <defs>
-                        <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#6366f1"/>
-                            <stop offset="100%" style="stop-color:#ec4899"/>
-                        </linearGradient>
-                    </defs>
-                    <circle cx="16" cy="16" r="14" fill="none" stroke="url(#logoGrad)" stroke-width="2"/>
-                    <polygon points="16,6 22,22 10,22" fill="url(#logoGrad)" opacity="0.9"/>
-                    <circle cx="16" cy="14" r="3" fill="#fff" opacity="0.8"/>
-                </svg>
-                <span class="logo-text">DataVision <span class="logo-accent">Pro</span></span>
+<!-- ===== 欢迎页 ===== -->
+<div class="welcome-screen" id="welcomeScreen">
+    <canvas class="welcome-particles" id="welcomeParticles"></canvas>
+    <div class="welcome-content"><div class="welcome-glow"></div>
+        <h1 class="welcome-title"><span class="welcome-line1">DATA</span><span class="welcome-line2">ANALYSIS</span></h1>
+        <p class="welcome-sub">交互式数据分析平台 · 从数据到洞察</p>
+        <button class="welcome-btn" id="btnStart"><span>开始使用</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        <p class="welcome-version">DataVision Pro v1.0</p>
+    </div>
+</div>
+
+<!-- ===== 主应用 ===== -->
+<div class="app-wrapper" id="appWrapper" style="display:none;">
+<div class="particle-bg"><canvas id="particleCanvas"></canvas></div>
+
+<header class="topbar">
+    <div class="topbar-left"><div class="logo"><svg class="logo-svg" viewBox="0 0 32 32" width="28" height="28"><defs><linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6366f1"/><stop offset="100%" style="stop-color:#ec4899"/></linearGradient></defs><circle cx="16" cy="16" r="14" fill="none" stroke="url(#logoGrad)" stroke-width="2"/><polygon points="16,6 22,22 10,22" fill="url(#logoGrad)" opacity="0.9"/></svg><span class="logo-text">DataVision <span class="logo-accent">Pro</span></span></div></div>
+    <nav class="stepper">
+        <button class="stepper-step active" data-step="upload"><span class="step-dot">1</span><span class="step-name">上传</span></button><span class="step-line"></span>
+        <button class="stepper-step" data-step="cleaning"><span class="step-dot">2</span><span class="step-name">清洗</span></button><span class="step-line"></span>
+        <button class="stepper-step" data-step="analysis"><span class="step-dot">3</span><span class="step-name">分析</span></button><span class="step-line"></span>
+        <button class="stepper-step" data-step="visualization"><span class="step-dot">4</span><span class="step-name">可视化</span></button><span class="step-line"></span>
+        <button class="stepper-step" data-step="export"><span class="step-dot">5</span><span class="step-name">导出</span></button>
+    </nav>
+    <div class="topbar-right"><div class="user-avatar">G</div></div>
+</header>
+
+<div class="app-layout">
+<nav class="nav-sidebar"><ul class="nav-menu">
+    <li class="nav-item active" data-view="dashboard"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>仪表盘</span></li>
+    <li class="nav-item" data-view="cleaning"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 12 3 20 7"/><polyline points="4 7 12 11 20 7"/><path d="M6 9.5v6l6 3.5 6-3.5v-6"/></svg><span>数据清洗</span></li>
+    <li class="nav-item" data-view="analysis"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>数据分析</span></li>
+    <li class="nav-item" data-view="visualization"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg><span>可视化</span></li>
+    <li class="nav-separator"></li>
+    <li class="nav-item" data-view="ai-assistant"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v1h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2V6a4 4 0 0 1 4-4z"/></svg><span>AI 助手</span></li>
+</ul></nav>
+
+<main class="main-area" id="mainArea">
+
+<!-- ===== 仪表盘 ===== -->
+<section class="view active" id="view-dashboard">
+    <div class="view-header"><h2>数据仪表盘</h2><p class="view-subtitle">数据中枢 · 一览全局</p></div>
+    <div class="dash-cards">
+        <div class="dash-card glass-card-neon"><div class="dash-card-icon" style="background:rgba(99,102,241,0.2)">📁</div><div class="dash-card-info"><span class="dash-card-value" id="dashTotal">0</span><span class="dash-card-label">数据集总数</span></div></div>
+        <div class="dash-card glass-card-pink"><div class="dash-card-icon" style="background:rgba(236,72,153,0.2)">⏳</div><div class="dash-card-info"><span class="dash-card-value" id="dashPending">0</span><span class="dash-card-label">待处理数量</span></div></div>
+        <div class="dash-card glass-card-cyan"><div class="dash-card-icon" style="background:rgba(56,189,248,0.2)">✅</div><div class="dash-card-info"><span class="dash-card-value" id="dashCompleted">0</span><span class="dash-card-label">已完成分析</span></div></div>
+        <div class="dash-card glass-card-dark"><div class="dash-card-icon" style="background:rgba(245,158,11,0.2)">🔄</div><div class="dash-card-info"><span class="dash-card-value" id="dashInProgress">0</span><span class="dash-card-label">进行中</span></div></div>
+    </div>
+    <div class="dash-actions">
+        <button class="dash-action-btn" id="btnQuickUpload"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>上传数据</button>
+        <button class="dash-action-btn" id="btnQuickClean" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 12 3 20 7"/><path d="M6 9.5v6l6 3.5 6-3.5v-6"/></svg>数据清洗</button>
+        <button class="dash-action-btn" id="btnQuickAnalysis" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>数据分析</button>
+        <button class="dash-action-btn" id="btnQuickViz" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>生成图表</button>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple hidden>
+    <div class="dash-recent glass-card-dark">
+        <div class="dash-recent-header"><h3>最近项目</h3><div class="dash-recent-actions"><span class="select-hint">双击查看完整数据 · 可多选批量处理</span><button class="btn-sm" id="btnSelectAll">全选</button><button class="btn-sm" id="btnDeselectAll">取消全选</button></div></div>
+        <div class="recent-list" id="recentList"><div class="empty-state-sm">暂无项目，点击"上传数据"开始分析</div></div>
+    </div>
+</section>
+
+<!-- ===== 清洗 ===== -->
+<section class="view" id="view-cleaning">
+    <div class="view-header"><h2>数据清洗</h2><p class="view-subtitle">缺失值处理 · 重复值删除 · 异常值检测</p></div>
+    <div class="file-indicator glass-card-dark"><span class="file-indicator-label">当前处理文件：</span><span class="file-indicator-name" id="cleanFileName">未选择文件</span></div>
+    <div class="clean-layout">
+        <div class="clean-config glass-card"><h3>清洗配置</h3>
+            <select class="form-select" id="missingMethod"><option value="none">不处理缺失值</option><option value="delete">删除含缺失值的行</option><option value="mean">填充均值</option><option value="median">填充中位数</option><option value="mode">填充众数</option></select>
+            <label class="form-label checkbox-label"><input type="checkbox" id="dropDuplicates" checked><span>删除重复行（默认开启）</span></label>
+            <label class="form-label">异常值检测方法</label>
+            <select class="form-select" id="outlierMethod"><option value="none">不检测</option><option value="iqr">IQR 方法</option><option value="zscore">Z-Score 方法</option></select>
+            <div class="method-hints"><p class="hint-item" id="hintIQR" style="display:none"><strong>IQR：</strong>四分位距法。用 Q1−1.5×IQR 和 Q3+1.5×IQR 作为边界检测异常值，对偏态分布数据鲁棒性好。</p><p class="hint-item" id="hintZScore" style="display:none"><strong>Z-Score：</strong>标准分数法。超过 3 个标准差的数值视为异常值，适合近似正态分布的数据。</p></div>
+            <button class="btn-primary btn-block" id="btnClean">开始清洗</button>
+        </div>
+        <div class="clean-result glass-card" id="cleanResult"><h3>清洗结果</h3>
+            <div class="empty-state-sm" id="cleanEmpty">配置参数后点击"开始清洗"</div>
+            <div id="cleanResultContent" style="display:none;">
+                <div class="clean-compare"><div class="compare-col"><h4>原始数据</h4><div class="compare-stat"><span>行数:</span><strong id="cleanOrigRows">--</strong></div><div class="compare-stat"><span>缺失值:</span><strong id="cleanOrigMissing">--</strong></div><div class="compare-stat"><span>重复行:</span><strong id="cleanOrigDup">--</strong></div></div><div class="compare-arrow">→</div><div class="compare-col"><h4>清洗后</h4><div class="compare-stat"><span>行数:</span><strong id="cleanNewRows">--</strong></div><div class="compare-stat"><span>缺失值:</span><strong id="cleanNewMissing">--</strong></div><div class="compare-stat"><span>重复行:</span><strong id="cleanNewDup">--</strong></div></div></div>
             </div>
         </div>
+    </div>
+    <!-- 清洗删除详情 -->
+    <div class="clean-deleted glass-card-dark" id="cleanDeletedSection" style="display:none;margin-top:16px;"><h3>被删除/修改的数据行</h3><div class="table-scroll" id="cleanDeletedTableWrap"><table class="data-table" id="cleanDeletedTable"></table></div></div>
+    <!-- 清洗后数据 -->
+    <div class="cleaned-data-section glass-card-dark" id="cleanedDataSection" style="display:none;margin-top:16px;"><h3>清洗后数据预览（可左右滑动查看全部列）</h3><div class="table-scroll" style="max-height:400px;"><table class="data-table" id="cleanedDataTable"></table></div></div>
+</section>
 
-        <!-- 步骤进度条 -->
-        <nav class="stepper" aria-label="分析流程">
-            <button class="stepper-step active" data-step="upload">
-                <span class="step-dot">1</span>
-                <span class="step-name">上传</span>
-            </button>
-            <span class="step-line"></span>
-            <button class="stepper-step" data-step="cleaning">
-                <span class="step-dot">2</span>
-                <span class="step-name">清洗</span>
-            </button>
-            <span class="step-line"></span>
-            <button class="stepper-step" data-step="analysis">
-                <span class="step-dot">3</span>
-                <span class="step-name">分析</span>
-            </button>
-            <span class="step-line"></span>
-            <button class="stepper-step" data-step="visualization">
-                <span class="step-dot">4</span>
-                <span class="step-name">可视化</span>
-            </button>
-            <span class="step-line"></span>
-            <button class="stepper-step" data-step="export">
-                <span class="step-dot">5</span>
-                <span class="step-name">导出</span>
-            </button>
-        </nav>
-
-        <div class="topbar-right">
-            <button class="btn-icon" id="btnTheme" title="切换主题">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-                </svg>
-            </button>
-            <button class="btn-icon" id="btnHelp" title="帮助">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-            </button>
-            <div class="user-avatar" title="用户">G</div>
+<!-- ===== 分析 ===== -->
+<section class="view" id="view-analysis">
+    <div class="view-header"><h2>数据分析</h2><p class="view-subtitle">统计 · 相关性 · 聚类 · 回归 · 异常检测</p></div>
+    <div class="file-indicator glass-card-dark"><span class="file-indicator-label">当前处理文件：</span><span class="file-indicator-name" id="analysisFileName">未选择文件</span></div>
+    <div class="analysis-mode-select" id="analysisModeSelect">
+        <div class="analysis-tools">
+            <button class="analysis-card glass-card-neon" data-action="statistics"><span class="analysis-icon">📊</span><strong>描述性统计</strong><small>选择列 → 均值、方差、分位数</small></button>
+            <button class="analysis-card glass-card-pink" data-action="correlation"><span class="analysis-icon">🔗</span><strong>相关性分析</strong><small>皮尔逊相关系数矩阵</small></button>
+            <button class="analysis-card glass-card-cyan" data-action="groupby"><span class="analysis-icon">📋</span><strong>分组聚合</strong><small>按列分组统计汇总</small></button>
+            <button class="analysis-card glass-card-neon" data-action="cluster"><span class="analysis-icon">🎯</span><strong>聚类分析</strong><small>多算法对比 · K-Means/GMM/OPTICS等</small></button>
+            <button class="analysis-card glass-card-pink" data-action="regression"><span class="analysis-icon">📈</span><strong>线性回归</strong><small>趋势拟合与预测</small></button>
+            <button class="analysis-card glass-card-cyan" data-action="anomaly"><span class="analysis-icon">⚠️</span><strong>异常检测</strong><small>Isolation Forest</small></button>
         </div>
-    </header>
-
-    <!-- ========== 主体布局 ========== -->
-    <div class="app-layout">
-        <!-- 左侧导航栏：仅导航菜单，无功能控件 -->
-        <nav class="nav-sidebar" role="navigation" aria-label="主导航">
-            <ul class="nav-menu">
-                <li class="nav-item active" data-view="dashboard">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-                    </svg>
-                    <span class="nav-label">仪表盘</span>
-                </li>
-                <li class="nav-item" data-view="upload">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/>
-                        <line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                    <span class="nav-label">数据上传</span>
-                </li>
-                <li class="nav-item" data-view="cleaning">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="4 7 12 3 20 7"/><polyline points="4 7 12 11 20 7"/>
-                        <path d="M6 9.5v6l6 3.5 6-3.5v-6"/>
-                    </svg>
-                    <span class="nav-label">数据清洗</span>
-                </li>
-                <li class="nav-item" data-view="analysis">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
-                        <line x1="6" y1="20" x2="6" y2="14"/>
-                    </svg>
-                    <span class="nav-label">数据分析</span>
-                </li>
-                <li class="nav-item" data-view="visualization">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>
-                    </svg>
-                    <span class="nav-label">可视化</span>
-                </li>
-                <li class="nav-item" data-view="export">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    <span class="nav-label">结果导出</span>
-                </li>
-                <li class="nav-separator"></li>
-                <li class="nav-item" data-view="ai-assistant">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2a4 4 0 0 1 4 4v1h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2V6a4 4 0 0 1 4-4z"/>
-                        <circle cx="9" cy="14" r="1" fill="currentColor"/><circle cx="15" cy="14" r="1" fill="currentColor"/>
-                    </svg>
-                    <span class="nav-label">AI 助手</span>
-                </li>
-            </ul>
-        </nav>
-
-        <!-- ========== 右侧主内容区 ========== -->
-        <main class="main-area" id="mainArea">
-
-            <!-- ===== 仪表盘视图（默认） ===== -->
-            <section class="view active" id="view-dashboard" data-view="dashboard">
-                <div class="view-header">
-                    <h2>数据仪表盘</h2>
-                    <p class="view-subtitle">数据中枢 · 一览全局</p>
-                </div>
-                <!-- 概览卡片 -->
-                <div class="dash-cards" id="dashCards">
-                    <div class="dash-card glass-card-neon">
-                        <div class="dash-card-icon" style="background:rgba(99,102,241,0.2)">📋</div>
-                        <div class="dash-card-info">
-                            <span class="dash-card-value" id="dashRowCount">--</span>
-                            <span class="dash-card-label">数据行数</span>
-                        </div>
-                    </div>
-                    <div class="dash-card glass-card-pink">
-                        <div class="dash-card-icon" style="background:rgba(236,72,153,0.2)">📊</div>
-                        <div class="dash-card-info">
-                            <span class="dash-card-value" id="dashColCount">--</span>
-                            <span class="dash-card-label">特征列数</span>
-                        </div>
-                    </div>
-                    <div class="dash-card glass-card-cyan">
-                        <div class="dash-card-icon" style="background:rgba(56,189,248,0.2)">⚠️</div>
-                        <div class="dash-card-info">
-                            <span class="dash-card-value" id="dashMissing">--</span>
-                            <span class="dash-card-label">缺失值数量</span>
-                        </div>
-                    </div>
-                    <div class="dash-card glass-card-dark">
-                        <div class="dash-card-icon" style="background:rgba(245,158,11,0.2)">🔍</div>
-                        <div class="dash-card-info">
-                            <span class="dash-card-value" id="dashOutliers">--</span>
-                            <span class="dash-card-label">异常值预警</span>
-                        </div>
-                    </div>
-                </div>
-                <!-- 快捷操作 -->
-                <div class="dash-actions">
-                    <button class="dash-action-btn" data-nav="upload">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        上传数据
-                    </button>
-                    <button class="dash-action-btn" data-nav="cleaning">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="4 7 12 3 20 7"/><polyline points="4 7 12 11 20 7"/><path d="M6 9.5v6l6 3.5 6-3.5v-6"/>
-                        </svg>
-                        数据清洗
-                    </button>
-                    <button class="dash-action-btn" data-nav="visualization">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>
-                        </svg>
-                        生成图表
-                    </button>
-                </div>
-                <!-- 最近项目 -->
-                <div class="dash-recent glass-card-dark">
-                    <h3>最近项目</h3>
-                    <div class="recent-list" id="recentList">
-                        <div class="empty-state-sm">暂无项目，上传数据开始分析</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== 上传视图 ===== -->
-            <section class="view" id="view-upload" data-view="upload">
-                <div class="view-header">
-                    <h2>数据上传</h2>
-                    <p class="view-subtitle">支持 CSV / Excel 格式，最大 10MB</p>
-                </div>
-                <div class="upload-dropzone glass-card" id="uploadDropzone">
-                    <svg class="upload-cloud" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
-                    </svg>
-                    <p class="upload-title">拖拽文件到此处或点击上传</p>
-                    <p class="upload-hint">CSV · XLSX · XLS</p>
-                    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
-                    <button class="btn-primary" id="btnSelectFile">选择文件</button>
-                </div>
-                <!-- 上传进度 -->
-                <div class="upload-progress" id="uploadProgress" style="display:none;">
-                    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-                    <p class="progress-text" id="progressText">上传中...</p>
-                </div>
-                <!-- 文件信息 + 数据预览 -->
-                <div class="file-preview glass-card" id="filePreview" style="display:none;">
-                    <div class="file-preview-header">
-                        <h3 id="previewFileName">文件名</h3>
-                        <div class="file-info-tags" id="fileInfoTags"></div>
-                    </div>
-                    <div class="table-scroll" id="uploadTableWrapper">
-                        <table class="data-table" id="uploadDataTable"></table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== 清洗视图 ===== -->
-            <section class="view" id="view-cleaning" data-view="cleaning">
-                <div class="view-header">
-                    <h2>数据清洗</h2>
-                    <p class="view-subtitle">缺失值处理 · 重复值删除 · 异常值检测</p>
-                </div>
-                <div class="clean-layout">
-                    <div class="clean-config glass-card">
-                        <h3>清洗配置</h3>
-                        <label class="form-label">缺失值处理策略</label>
-                        <select class="form-select" id="missingMethod">
-                            <option value="none">不处理</option>
-                            <option value="delete">删除含缺失值的行</option>
-                            <option value="mean">填充均值</option>
-                            <option value="median">填充中位数</option>
-                            <option value="mode">填充众数</option>
-                        </select>
-                        <label class="form-label checkbox-label">
-                            <input type="checkbox" id="dropDuplicates">
-                            <span>删除重复行</span>
-                        </label>
-                        <label class="form-label">异常值检测方法</label>
-                        <select class="form-select" id="outlierMethod">
-                            <option value="none">不检测</option>
-                            <option value="iqr">IQR 方法</option>
-                            <option value="zscore">Z-Score 方法</option>
-                        </select>
-                        <button class="btn-primary btn-block" id="btnClean">开始清洗</button>
-                    </div>
-                    <div class="clean-result glass-card" id="cleanResult">
-                        <h3>清洗结果</h3>
-                        <div class="empty-state-sm" id="cleanEmpty">配置参数后点击"开始清洗"</div>
-                        <div class="clean-compare" id="cleanCompare" style="display:none;">
-                            <div class="compare-col">
-                                <h4>原始数据</h4>
-                                <div class="compare-stat"><span>行数:</span><strong id="cleanOrigRows">--</strong></div>
-                                <div class="compare-stat"><span>缺失值:</span><strong id="cleanOrigMissing">--</strong></div>
-                                <div class="compare-stat"><span>重复行:</span><strong id="cleanOrigDup">--</strong></div>
-                            </div>
-                            <div class="compare-arrow">→</div>
-                            <div class="compare-col">
-                                <h4>清洗后</h4>
-                                <div class="compare-stat"><span>行数:</span><strong id="cleanNewRows">--</strong></div>
-                                <div class="compare-stat"><span>缺失值:</span><strong id="cleanNewMissing">--</strong></div>
-                                <div class="compare-stat"><span>重复行:</span><strong id="cleanNewDup">--</strong></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== 分析视图 ===== -->
-            <section class="view" id="view-analysis" data-view="analysis">
-                <div class="view-header">
-                    <h2>数据分析</h2>
-                    <p class="view-subtitle">统计 · 相关性 · 聚类 · 回归 · 异常检测</p>
-                </div>
-                <div class="analysis-tools">
-                    <button class="analysis-card glass-card-neon" data-action="statistics">
-                        <span class="analysis-icon">📊</span>
-                        <strong>描述性统计</strong>
-                        <small>均值、方差、分位数</small>
-                    </button>
-                    <button class="analysis-card glass-card-pink" data-action="correlation">
-                        <span class="analysis-icon">🔗</span>
-                        <strong>相关性分析</strong>
-                        <small>皮尔逊相关系数矩阵</small>
-                    </button>
-                    <button class="analysis-card glass-card-cyan" data-action="groupby">
-                        <span class="analysis-icon">📋</span>
-                        <strong>分组聚合</strong>
-                        <small>按列分组统计汇总</small>
-                    </button>
-                    <button class="analysis-card glass-card-neon" data-action="cluster">
-                        <span class="analysis-icon">🎯</span>
-                        <strong>K-Means 聚类</strong>
-                        <small>无监督聚类分析</small>
-                    </button>
-                    <button class="analysis-card glass-card-pink" data-action="regression">
-                        <span class="analysis-icon">📈</span>
-                        <strong>线性回归</strong>
-                        <small>趋势拟合与预测</small>
-                    </button>
-                    <button class="analysis-card glass-card-cyan" data-action="anomaly">
-                        <span class="analysis-icon">⚠️</span>
-                        <strong>异常检测</strong>
-                        <small>Isolation Forest</small>
-                    </button>
-                </div>
-                <div class="analysis-result glass-card" id="analysisResult">
-                    <h3>分析结果</h3>
-                    <div class="result-body" id="analysisResultBody">
-                        <div class="empty-state-sm">选择上方分析方法开始探索</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== 可视化视图 ===== -->
-            <section class="view" id="view-visualization" data-view="visualization">
-                <div class="view-header">
-                    <h2>数据可视化</h2>
-                    <p class="view-subtitle">12 种图表类型 · ECharts 驱动</p>
-                </div>
-                <div class="viz-layout">
-                    <div class="viz-config glass-card">
-                        <h3>图表配置</h3>
-                        <label class="form-label">图表类型</label>
-                        <select class="form-select" id="chartType">
-                            <option value="line">折线图</option>
-                            <option value="bar">柱状图</option>
-                            <option value="pie">饼图</option>
-                            <option value="scatter">散点图</option>
-                            <option value="box">箱线图</option>
-                            <option value="heatmap">热力图</option>
-                            <option value="radar">雷达图</option>
-                            <option value="histogram">直方图</option>
-                            <option value="area">面积图</option>
-                            <option value="funnel">漏斗图</option>
-                        </select>
-                        <label class="form-label">X 轴列</label>
-                        <select class="form-select" id="xColumn"></select>
-                        <label class="form-label">Y 轴列（可多选）</label>
-                        <select class="form-select" id="yColumn" multiple></select>
-                        <label class="form-label">图表标题</label>
-                        <input type="text" class="form-input" id="chartTitle" placeholder="输入图表标题">
-                        <button class="btn-primary btn-block" id="btnGenerateChart">生成图表</button>
-                    </div>
-                    <div class="viz-canvas glass-card" id="vizCanvas">
-                        <h3>图表预览</h3>
-                        <div class="chart-stage" id="chartStage">
-                            <div class="empty-state-sm">配置参数后点击"生成图表"</div>
-                        </div>
-                        <div class="chart-actions" id="chartActions" style="display:none;">
-                            <button class="btn-sm" id="btnExportPNG">导出 PNG</button>
-                            <button class="btn-sm" id="btnClearChart">清空</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== 导出视图 ===== -->
-            <section class="view" id="view-export" data-view="export">
-                <div class="view-header">
-                    <h2>结果导出</h2>
-                    <p class="view-subtitle">数据 · 图表 · 报告</p>
-                </div>
-                <div class="export-options">
-                    <div class="export-card glass-card-neon" data-export="data">
-                        <span class="export-icon">📥</span>
-                        <strong>导出数据</strong>
-                        <small>CSV 格式</small>
-                        <button class="btn-primary btn-sm">下载</button>
-                    </div>
-                    <div class="export-card glass-card-pink" data-export="chart">
-                        <span class="export-icon">🖼️</span>
-                        <strong>导出图表</strong>
-                        <small>PNG 图片</small>
-                        <button class="btn-primary btn-sm">导出</button>
-                    </div>
-                    <div class="export-card glass-card-cyan" data-export="report">
-                        <span class="export-icon">📄</span>
-                        <strong>导出报告</strong>
-                        <small>HTML 格式</small>
-                        <button class="btn-primary btn-sm">生成</button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== AI 助手视图 ===== -->
-            <section class="view" id="view-ai-assistant" data-view="ai-assistant">
-                <div class="view-header">
-                    <h2>AI 智能助手</h2>
-                    <p class="view-subtitle">自然语言交互 · 智能洞察 · 图表推荐</p>
-                </div>
-                <div class="ai-layout glass-card">
-                    <div class="ai-chat-area" id="aiChatArea">
-                        <div class="ai-msg bot">
-                            <div class="ai-avatar">AI</div>
-                            <div class="ai-bubble">
-                                <p>你好！我是数据分析助手，可以帮你：</p>
-                                <ul>
-                                    <li>数据概览与统计摘要</li>
-                                    <li>自动发现数据洞察</li>
-                                    <li>推荐合适的可视化图表</li>
-                                    <li>回答数据相关问题</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="ai-input-row">
-                        <input type="text" class="form-input" id="aiInput" placeholder="输入你的问题，例如：数据概览">
-                        <button class="btn-primary" id="btnAISend">发送</button>
-                    </div>
-                </div>
-            </section>
-
-        </main>
     </div>
-
-    <!-- Toast 通知 -->
-    <div class="toast-container" id="toastContainer"></div>
-
-    <!-- 加载遮罩 -->
-    <div class="loading-overlay" id="loadingOverlay" style="display:none;">
-        <div class="loading-spinner"></div>
-        <p id="loadingText">处理中...</p>
+    <div class="analysis-work-panel" id="analysisWorkPanel" style="display:none;">
+        <button class="btn-sm" id="btnBackToModes" style="margin-bottom:12px;">← 返回分析模式选择</button>
+        <div class="analysis-params glass-card" id="analysisParams"></div>
+        <div class="analysis-result glass-card" id="analysisResult" style="margin-top:16px;"><h3>分析结果</h3><div class="result-body" id="analysisResultBody"></div></div>
     </div>
+</section>
 
-    <!-- JS 模块 -->
-    <script src="/js/utils.js"></script>
-    <script src="/js/api.js"></script>
-    <script src="/js/charts.js"></script>
-    <script src="/js/ai-agent.js"></script>
-    <script src="/js/particles.js"></script>
-    <script src="/js/main.js"></script>
+<!-- ===== 可视化 ===== -->
+<section class="view" id="view-visualization">
+    <div class="view-header"><h2>数据可视化</h2><p class="view-subtitle">柱状图 · 折线图 · 饼图 · 面积图 · 交互式编辑</p></div>
+    <div class="file-indicator glass-card-dark"><span class="file-indicator-label">当前处理文件：</span><span class="file-indicator-name" id="vizFileName">未选择文件</span></div>
+    <div class="viz-layout">
+        <div class="viz-config glass-card"><h3>图表配置</h3>
+            <select class="form-select" id="chartType"><option value="bar">柱状图</option><option value="line">折线图</option><option value="pie">饼图</option><option value="area">面积图</option></select>
+            <label class="form-label">X 轴列</label><select class="form-select" id="xColumn"></select>
+            <label class="form-label">Y 轴列（可多选，每项可调色，选中高亮红色）</label>
+            <div id="yColumnColorList" style="max-height:160px;overflow-y:auto;margin-bottom:6px;"></div>
+            <label class="form-label">图表标题（可长按拖动重新定位）</label><input type="text" class="form-input" id="chartTitle" placeholder="输入图表标题">
+            <div class="viz-options-row">
+                <label class="form-label checkbox-label"><input type="checkbox" id="showDataLabels"><span>显示数据标签</span></label>
+                <label class="form-label checkbox-label"><input type="checkbox" id="mergeSameX"><span>合并相同X轴数据</span></label>
+                <select class="form-select" id="xLabelRotate" style="width:auto;font-size:0.82em;"><option value="0">X轴标签横排</option><option value="30">倾斜30°</option><option value="45" selected>倾斜45°</option><option value="60">倾斜60°</option><option value="90">竖排90°</option></select>
+            </div>
+            <!-- 轴定义域编辑 -->
+            <div class="axis-domain-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">
+                <label class="form-label" style="margin-top:0;">📐 轴定义域（留空自动计算）</label>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div><label style="font-size:0.75em;color:var(--text-muted);">X轴最小值</label><input type="number" class="form-input" id="xAxisMin" placeholder="auto" step="any" style="font-size:0.82em;"></div>
+                    <div><label style="font-size:0.75em;color:var(--text-muted);">X轴最大值</label><input type="number" class="form-input" id="xAxisMax" placeholder="auto" step="any" style="font-size:0.82em;"></div>
+                    <div><label style="font-size:0.75em;color:var(--text-muted);">Y轴最小值</label><input type="number" class="form-input" id="yAxisMin" placeholder="auto" step="any" style="font-size:0.82em;"></div>
+                    <div><label style="font-size:0.75em;color:var(--text-muted);">Y轴最大值</label><input type="number" class="form-input" id="yAxisMax" placeholder="auto" step="any" style="font-size:0.82em;"></div>
+                </div>
+                <button class="btn-sm" id="btnApplyAxisDomain" style="margin-top:6px;width:100%;">应用轴定义域</button>
+            </div>
+            <button class="btn-primary btn-block" id="btnGenerateChart">生成图表</button>
+        </div>
+        <div class="viz-canvas glass-card"><h3>图表预览（双击标题/图例编辑 · 长按拖拽重新定位）</h3>
+            <div class="chart-stage" id="chartStage"><div class="empty-state-sm">配置参数后点击"生成图表"</div></div>
+            <div class="chart-actions">
+                <button class="btn-sm viz-export-btn" id="btnVizExportData">导出数据</button>
+                <button class="btn-sm viz-export-btn" id="btnVizExportChart">导出图表</button>
+                <button class="btn-sm viz-export-btn" id="btnVizExportReport">导出报告</button>
+                <button class="btn-sm viz-clear-btn" id="btnClearChart">清空</button>
+            </div>
+        </div>
+    </div>
+    <!-- 数据表格 -->
+    <div class="viz-data-table glass-card-dark" id="vizDataSection" style="display:none;margin-top:16px;">
+        <div class="viz-data-header">
+            <h3>数据表格</h3>
+            <div class="viz-data-actions">
+                <input type="text" class="form-input" id="tableFilterInput" placeholder="筛选数据..." style="width:150px;font-size:0.82em;">
+                <select class="form-select" id="tableFilterCol" style="width:auto;font-size:0.82em;"><option value="">全部列</option></select>
+                <button class="btn-sm" id="btnAddRow">+ 开头添加行</button>
+                
+                <button class="btn-sm btn-sm-danger" id="btnSaveChanges">保存修改</button>
+            </div>
+        </div>
+        <div class="table-scroll" id="vizDataTableWrap"><table class="data-table editable-table" id="vizDataTable"></table></div>
+        <p class="table-hint">双击单元格编辑 · 双击列头重命名 · 点击最后一列"删除"按钮删行</p>
+    </div>
+</section>
+
+<!-- ===== AI 助手 ===== -->
+<section class="view" id="view-ai-assistant">
+    <div class="view-header"><h2>AI 智能助手</h2><p class="view-subtitle">自然语言交互 · 智能洞察 · 图表推荐</p></div>
+    <div class="ai-layout glass-card">
+        <div class="ai-chat-area" id="aiChatArea"><div class="ai-msg bot"><div class="ai-avatar">AI</div><div class="ai-bubble"><p>你好！我是数据分析助手，可以帮你：</p><ul><li>数据概览与统计摘要</li><li>自动发现数据洞察</li><li>推荐合适的可视化图表</li><li>回答数据相关问题</li></ul></div></div></div>
+        <div class="ai-input-row"><input type="text" class="form-input" id="aiInput" placeholder="输入你的问题"><button class="btn-primary" id="btnAISend">发送</button></div>
+    </div>
+</section>
+
+</main></div></div>
+
+<!-- ===== 数据预览弹窗（全量+滑动条） ===== -->
+<div class="modal-overlay" id="dataPreviewModal" style="display:none;">
+    <div class="modal-content-wide glass-card" id="dataPreviewContent">
+        <div class="modal-header"><h3 id="previewModalTitle">数据预览</h3><button class="modal-close" id="btnClosePreview">&times;</button></div>
+        <div class="modal-body">
+            <div class="file-info-tags" id="previewModalTags"></div>
+            <div class="table-scroll" id="previewModalScroll" style="max-height:60vh;"><table class="data-table" id="previewModalTable"></table></div>
+        </div>
+    </div>
+</div>
+
+<div class="confirm-overlay" id="confirmOverlay" style="display:none;">
+    <div class="confirm-dialog glass-card">
+        <p id="confirmMsg">确定要执行此操作吗？</p>
+        <div class="confirm-btns">
+            <button class="btn-sm" id="confirmCancel">取消</button>
+            <button class="btn-sm btn-sm-danger" id="confirmOk">确定</button>
+        </div>
+    </div>
+</div>
+<div class="toast-container" id="toastContainer"></div>
+<div class="loading-overlay" id="loadingOverlay" style="display:none;"><div class="loading-spinner"></div><p id="loadingText">处理中...</p></div>
+
+<script src="/js/utils.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/ai-agent.js"></script>
+<script src="/js/particles.js"></script>
+<script src="/js/main.js"></script>
 </body>
 </html>
