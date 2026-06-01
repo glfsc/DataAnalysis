@@ -1,0 +1,68 @@
+# ============================================
+# DataVision Pro - .dockerignore
+# ============================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual Environment
+venv/
+env/
+.venv/
+*.conda/
+
+# Git
+.git/
+.gitignore
+
+# Database (运行时生成)
+*.db
+*.db-shm
+*.db-wal
+
+# Uploads (运行时生成)
+backend/uploads/
+uploads/
+
+# Logs
+*.log
+app.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Claude
+.claude/
+
+# Test / Temp
+tmp/
+temp/
+*.tmp
+
+# Documentation
+README.md
+
+# Docker
+Dockerfile
+.dockerignore
