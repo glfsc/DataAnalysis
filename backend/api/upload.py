@@ -133,3 +133,18 @@ async def list_files(db: Session = Depends(get_db)):
             for f in files
         ],
     }
+
+
+@router.get("/upload/{file_id}/info", summary="获取文件预览信息")
+async def get_file_info(file_id: str, db: Session = Depends(get_db)):
+    """获取指定文件的基本信息和预览数据（支持清洗后文件）"""
+    df = _load_df(file_id, db)
+    preview = DataService.get_preview(df)
+    info_data = DataService.get_info(df)
+    return _sanitize({
+        "file_id": file_id,
+        "preview": preview,
+        "columns": info_data["column_names"],
+        "row_count": info_data["rows"],
+        "column_count": info_data["columns"],
+    })

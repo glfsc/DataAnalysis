@@ -145,6 +145,7 @@ from api.analysis import router as analysis_router
 from api.visualization import router as visualization_router
 from api.export import router as export_router
 from api.ai_agent import router as ai_agent_router
+from api.data_crud import router as data_crud_router
 
 app.include_router(upload_router)
 app.include_router(cleaning_router)
@@ -152,6 +153,7 @@ app.include_router(analysis_router)
 app.include_router(visualization_router)
 app.include_router(export_router)
 app.include_router(ai_agent_router)
+app.include_router(data_crud_router)
 
 # ============ 静态文件服务 ============
 
@@ -204,8 +206,7 @@ async def system_info():
         "max_file_size_mb": MAX_FILE_SIZE / (1024 * 1024),
         "allowed_extensions": list(ALLOWED_EXTENSIONS),
         "supported_charts": [
-            "line", "bar", "pie", "scatter", "box",
-            "heatmap", "radar", "histogram", "area", "funnel"
+            "bar", "line", "pie", "area"
         ],
         "features": [
             "data_upload", "data_cleaning", "statistical_analysis",
