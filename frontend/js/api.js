@@ -7,6 +7,10 @@ const API = {
     async request(endpoint, options = {}) {
         const url = `${this.BASE_URL}${endpoint}`;
         const config = { headers: { 'Accept': 'application/json' }, ...options };
+        // 自动附加认证令牌
+        if (window.Auth && window.Auth.getToken()) {
+            config.headers['Authorization'] = `Bearer ${window.Auth.getToken()}`;
+        }
         if (!(options.body instanceof FormData)) {
             config.headers['Content-Type'] = 'application/json';
             if (options.body && typeof options.body === 'object') config.body = JSON.stringify(options.body);
@@ -78,5 +82,28 @@ const API = {
     /* ----- 列表 ----- */
     getUploadList() { return this.request('/upload/list'); },
     getFileInfo(fileId) { return this.request(`/upload/${fileId}/info`); },
+
+    /* ----- 用户认证 ----- */
+    authRegister(username, password, password_confirm) {
+        return this.request('/auth/register', { method: 'POST', body: { username, password, password_confirm } });
+    },
+    authLogin(username, password, remember = false) {
+        return this.request('/auth/login', { method: 'POST', body: { username, password, remember } });
+    },
+    authRecover(username) {
+        return this.request('/auth/recover', { method: 'POST', body: { username } });
+    },
+    authCheck() {
+        return this.request('/auth/check');
+    },
+    authGetMe() {
+        return this.request('/auth/me');
+    },
+    authUpdateMe(data) {
+        return this.request('/auth/me', { method: 'PUT', body: data });
+    },
+    authLogout() {
+        return this.request('/auth/logout', { method: 'POST' });
+    },
 };
 window.API = API;

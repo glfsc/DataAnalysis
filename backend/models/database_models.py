@@ -2,8 +2,34 @@
 ORM数据库模型定义
 """
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, Boolean, ForeignKey
 from database import Base
+
+
+class User(Base):
+    """用户账户表"""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(50), unique=True, nullable=False, index=True, comment="用户名")
+    password_hash = Column(String(128), nullable=False, comment="密码哈希（PBKDF2-SHA256）")
+    salt = Column(String(64), nullable=False, comment="密码盐值")
+    email = Column(String(120), default="", comment="邮箱")
+    avatar_url = Column(String(500), default="", comment="头像URL")
+    display_name = Column(String(100), default="", comment="显示名称")
+    created_at = Column(DateTime, default=datetime.utcnow, comment="注册时间")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+
+
+class UserSession(Base):
+    """用户会话令牌表"""
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, comment="用户ID")
+    token = Column(String(64), unique=True, nullable=False, index=True, comment="会话令牌")
+    created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
+    expires_at = Column(DateTime, nullable=False, comment="过期时间")
 
 
 class UploadedFile(Base):

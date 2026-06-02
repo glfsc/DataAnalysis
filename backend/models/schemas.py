@@ -224,3 +224,68 @@ class SuccessResponse(BaseModel):
     """成功响应"""
     message: str = Field("操作成功", description="状态消息")
     data: Optional[Dict[str, Any]] = Field(None, description="返回数据")
+
+
+# ============ 用户认证相关模型 ============
+
+class RegisterRequest(BaseModel):
+    """用户注册请求"""
+    username: str = Field(..., min_length=2, max_length=50, description="用户名")
+    password: str = Field(..., min_length=6, max_length=100, description="密码")
+    password_confirm: str = Field(..., min_length=6, max_length=100, description="确认密码")
+
+    @validator("password_confirm")
+    def passwords_match(cls, v: str, values: dict) -> str:
+        if "password" in values and v != values["password"]:
+            raise ValueError("两次输入的密码不一致")
+        return v
+
+    @validator("username")
+    def username_valid(cls, v: str) -> str:
+        import re
+        if not re.match(r'^[a-zA-Z0-9_一-鿿]+$', v):
+            raise ValueError("用户名只能包含字母、数字、下划线和中文")
+        return v
+
+
+class LoginRequest(BaseModel):
+    """用户登录请求"""
+    username: str = Field(..., min_length=1, description="用户名")
+    password: str = Field(..., min_length=1, description="密码")
+    remember: bool = Field(False, description="是否记住登录（免登录）")
+
+
+class RecoverRequest(BaseModel):
+    """密码找回请求"""
+    username: str = Field(..., min_length=1, description="用户名")
+
+
+class UpdateUserRequest(BaseModel):
+    """更新用户信息请求"""
+    email: Optional[str] = Field(None, max_length=120, description="邮箱")
+    display_name: Optional[str] = Field(None, max_length=100, description="显示名称")
+    password: Optional[str] = Field(None, min_length=6, max_length=100, description="新密码（留空不修改）")
+    password_confirm: Optional[str] = Field(None, description="确认新密码")
+
+    @validator("password_confirm")
+    def passwords_match(cls, v: str, values: dict) -> str:
+        if v is not None and "password" in values and v != values.get("password"):
+            raise ValueError("两次输入的密码不一致")
+        return v
+
+
+class UserInfo(BaseModel):
+    """用户信息响应"""
+    id: int = Field(..., description="用户ID")
+    username: str = Field(..., description="用户名")
+    email: str = Field("", description="邮箱")
+    display_name: str = Field("", description="显示名称")
+    avatar_url: str = Field("", description="头像URL")
+    created_at: Optional[str] = Field(None, description="注册时间")
+
+
+class AuthResponse(BaseModel):
+    """认证响应"""
+    token: str = Field(..., description="会话令牌")
+    user: UserInfo = Field(..., description="用户信息")
+    message: str = Field("操作成功", description="状态消息")

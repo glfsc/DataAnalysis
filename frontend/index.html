@@ -11,11 +11,13 @@
 <!-- ===== 欢迎页 ===== -->
 <div class="welcome-screen" id="welcomeScreen">
     <canvas class="welcome-particles" id="welcomeParticles"></canvas>
+    <!-- 右上方认证区域 -->
+    <div class="welcome-auth-area" id="welcomeAuthArea"></div>
     <div class="welcome-content"><div class="welcome-glow"></div>
         <h1 class="welcome-title"><span class="welcome-line1">DATA</span><span class="welcome-line2">ANALYSIS</span></h1>
         <p class="welcome-sub">交互式数据分析平台 · 从数据到洞察</p>
         <button class="welcome-btn" id="btnStart"><span>开始使用</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
-        <p class="welcome-version">DataVision Pro v1.0</p>
+        <p class="welcome-version">FlyFish出品</p>
     </div>
 </div>
 
@@ -24,7 +26,7 @@
 <div class="particle-bg"><canvas id="particleCanvas"></canvas></div>
 
 <header class="topbar">
-    <div class="topbar-left"><div class="logo"><svg class="logo-svg" viewBox="0 0 32 32" width="28" height="28"><defs><linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6366f1"/><stop offset="100%" style="stop-color:#ec4899"/></linearGradient></defs><circle cx="16" cy="16" r="14" fill="none" stroke="url(#logoGrad)" stroke-width="2"/><polygon points="16,6 22,22 10,22" fill="url(#logoGrad)" opacity="0.9"/></svg><span class="logo-text">DataVision <span class="logo-accent">Pro</span></span></div></div>
+    <div class="topbar-left"><div class="logo"><svg class="logo-svg" viewBox="0 0 32 32" width="28" height="28"><defs><linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6366f1"/><stop offset="100%" style="stop-color:#ec4899"/></linearGradient></defs><circle cx="16" cy="16" r="14" fill="none" stroke="url(#logoGrad)" stroke-width="2"/><polygon points="16,6 22,22 10,22" fill="url(#logoGrad)" opacity="0.9"/></svg><span class="logo-text">Data <span class="logo-accent">Analysis</span></span></div></div>
     <nav class="stepper">
         <button class="stepper-step active" data-step="upload"><span class="step-dot">1</span><span class="step-name">上传</span></button><span class="step-line"></span>
         <button class="stepper-step" data-step="cleaning"><span class="step-dot">2</span><span class="step-name">清洗</span></button><span class="step-line"></span>
@@ -32,7 +34,7 @@
         <button class="stepper-step" data-step="visualization"><span class="step-dot">4</span><span class="step-name">可视化</span></button><span class="step-line"></span>
         <button class="stepper-step" data-step="export"><span class="step-dot">5</span><span class="step-name">导出</span></button>
     </nav>
-    <div class="topbar-right"><div class="user-avatar">G</div></div>
+    <div class="topbar-right" id="topbarUserAvatar"><div class="user-avatar">G</div></div>
 </header>
 
 <div class="app-layout">
@@ -208,6 +210,7 @@
 
 <script src="/js/utils.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
 <script src="/js/charts.js"></script>
 <script src="/js/ai-agent.js"></script>
 <script src="/js/particles.js"></script>

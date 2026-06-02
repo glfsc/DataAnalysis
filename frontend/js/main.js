@@ -10,7 +10,9 @@ const App = {
     },
 
     init() {
-        console.log('DataVision Pro init');
+        console.log('Data Analysis System init');
+        // 初始化认证模块
+        if (typeof Auth !== 'undefined') Auth.init();
         this._initWelcomeParticles(); this._bindWelcomeBtn();
         this._bindNavEvents(); this._bindUploadEvents(); this._bindCleaningEvents();
         this._bindAnalysisEvents(); this._bindVisualizationEvents(); this._bindExportEvents();
@@ -26,7 +28,24 @@ const App = {
         (function anim(){if(document.getElementById('welcomeScreen').classList.contains('fade-out'))return;ctx.clearRect(0,0,c.width,c.height);pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<-10)p.x=c.width+10;if(p.x>c.width+10)p.x=-10;if(p.y<-10)p.y=c.height+10;if(p.y>c.height+10)p.y=-10;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.color;ctx.globalAlpha=p.alpha;ctx.fill();});ctx.globalAlpha=1;for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<120){ctx.strokeStyle='rgba(99,102,241,'+((1-dist/120)*0.08)+')';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();}}requestAnimationFrame(anim);})();
         window.addEventListener('resize',()=>{c.width=window.innerWidth;c.height=window.innerHeight;});
     },
-    _bindWelcomeBtn(){document.getElementById('btnStart').addEventListener('click',()=>{document.getElementById('welcomeScreen').classList.add('fade-out');document.getElementById('appWrapper').style.display='block';setTimeout(()=>{if(typeof Particles!=='undefined')Particles.init();},300);});},
+    _bindWelcomeBtn(){
+        document.getElementById('btnStart').addEventListener('click',()=>{
+            // 检查登录状态
+            if (typeof Auth !== 'undefined' && !Auth.isLoggedIn()) {
+                Auth._showAuthModal('login');
+                return;
+            }
+            this._enterApp();
+        });
+    },
+    /** 进入主应用（欢迎页淡出，显示仪表盘） */
+    _enterApp(){
+        document.getElementById('welcomeScreen').classList.add('fade-out');
+        document.getElementById('appWrapper').style.display='block';
+        // 刷新顶栏头像
+        if (typeof Auth !== 'undefined') Auth._renderTopbarAvatar();
+        setTimeout(()=>{if(typeof Particles!=='undefined')Particles.init();},300);
+    },
 
     /* ========== 文件管理 ========== */
     _addFile(r){const fid=r.file_id;this.state.files[fid]={fileName:r.file_name,fileSize:r.file_size,uploadTime:new Date().toISOString(),columns:r.columns||[],numericColumns:r.numeric_columns||[],rowCount:r.row_count||0,colCount:r.column_count||0,missingCount:r.missing_count||0,cleanedFileId:null,previewData:r.preview_data||[],progress:{upload:true,cleaning:false,analysis:false,visualization:false,export:false}};if(!this.state.fileOrder.includes(fid))this.state.fileOrder.unshift(fid);if(!this.state.selectedIds.includes(fid))this.state.selectedIds.push(fid);this.state.currentFileId=fid;this._refreshDashboard();this._updateFileIndicators();},

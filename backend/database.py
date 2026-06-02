@@ -51,6 +51,6 @@ def get_db():
 def init_db():
     """初始化数据库表结构"""
     from models.database_models import (  # noqa: F401
-        UploadedFile, AnalysisResult, ChartConfig
+        UploadedFile, AnalysisResult, ChartConfig, User, UserSession
     )
     Base.metadata.create_all(bind=engine)
