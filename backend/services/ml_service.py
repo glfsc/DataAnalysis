@@ -601,8 +601,9 @@ class MLService:
                     algo_params.setdefault("n_clusters", params.get("n_clusters", 3))
                     algo_params.setdefault("linkage", "ward")
                 elif algo_key == "gmm":
-                    algo_params.setdefault("n_components", params.get("n_clusters", 3))
+                    algo_params.setdefault("n_components", algo_params.pop("n_clusters", params.get("n_clusters", 3)))
                     algo_params.setdefault("covariance_type", "full")
+                    algo_params.pop("n_clusters", None)  # 移除不被 GMM 接受的参数
 
                 result = algo_func(df, features, **algo_params)
                 results[algo_key] = result
