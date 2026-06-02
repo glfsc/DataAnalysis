@@ -17,6 +17,12 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 
+# 头像上传配置
+AVATAR_DIR = BASE_DIR / "uploads" / "avatars"
+AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
+ALLOWED_AVATAR_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
 # 静态文件配置 — 指向前端目录
 STATIC_DIR = BASE_DIR.parent / "frontend"
 TEMPLATE_DIR = STATIC_DIR

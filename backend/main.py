@@ -173,6 +173,11 @@ if STATIC_DIR.exists():
     if lib_dir.exists():
         app.mount("/lib", StaticFiles(directory=str(lib_dir)), name="lib")
 
+# 挂载上传目录（头像等）
+from config import UPLOAD_DIR
+if UPLOAD_DIR.exists():
+    app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
 
 @app.get("/", include_in_schema=False)
 async def serve_frontend():

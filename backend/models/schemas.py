@@ -264,6 +264,7 @@ class UpdateUserRequest(BaseModel):
     """更新用户信息请求"""
     email: Optional[str] = Field(None, max_length=120, description="邮箱")
     display_name: Optional[str] = Field(None, max_length=100, description="显示名称")
+    avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL")
     password: Optional[str] = Field(None, min_length=6, max_length=100, description="新密码（留空不修改）")
     password_confirm: Optional[str] = Field(None, description="确认新密码")
 

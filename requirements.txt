@@ -19,6 +19,9 @@ xlrd>=2.0.1
 scipy>=1.12.0
 scikit-learn>=1.4.1
 
+# 图像处理
+Pillow>=10.2.0
+
 # 其他工具
 pydantic>=2.6.1
 python-dotenv>=1.0.1

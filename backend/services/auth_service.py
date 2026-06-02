@@ -166,12 +166,14 @@ def get_user_info(user: User) -> dict:
 def update_user_info(db: Session, user: User, **kwargs) -> dict:
     """
     更新用户信息
-    可更新字段: email, display_name, password
+    可更新字段: email, display_name, avatar_url, password
     """
     if "email" in kwargs and kwargs["email"] is not None:
         user.email = kwargs["email"]
     if "display_name" in kwargs and kwargs["display_name"] is not None:
         user.display_name = kwargs["display_name"]
+    if "avatar_url" in kwargs and kwargs["avatar_url"] is not None:
+        user.avatar_url = kwargs["avatar_url"]
     if "password" in kwargs and kwargs["password"]:
         password_hash, salt = _hash_password(kwargs["password"])
         user.password_hash = password_hash
@@ -195,6 +197,14 @@ def logout_user(db: Session, token: str) -> None:
 def get_current_user(db: Session, token: str) -> User | None:
     """获取当前登录用户（从令牌）"""
     return _get_user_by_token(db, token)
+
+
+def save_avatar(db: Session, user: User, avatar_url: str) -> None:
+    """保存用户头像URL"""
+    user.avatar_url = avatar_url
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    logger.info(f"头像已更新: {user.username} -> {avatar_url}")
 
 
 def _user_to_dict(user: User) -> dict:
