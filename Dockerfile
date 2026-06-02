@@ -22,10 +22,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 创建 uploads 目录（确保存在）
-RUN mkdir -p backend/uploads
+RUN mkdir -p backend/uploads backend/uploads/avatars
+
+# 启动脚本权限
+RUN chmod +x start.sh
 
 # 暴露端口（Railway 通过 PORT 环境变量注入）
 EXPOSE 8000
 
-# 启动服务（使用 uvicorn 直接启动，不启用 reload）
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# 启动服务
+CMD ["./start.sh"]
