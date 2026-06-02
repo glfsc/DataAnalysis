@@ -105,5 +105,11 @@ const API = {
     authLogout() {
         return this.request('/auth/logout', { method: 'POST' });
     },
+
+    /* ----- 管理员 ----- */
+    adminListUsers() { return this.request('/auth/admin/users'); },
+    adminDeleteUser(userId) { return this.request(`/auth/admin/users/${userId}`, { method: 'DELETE' }); },
+    adminResetPassword(userId) { return this.request(`/auth/admin/users/${userId}/reset-password`, { method: 'POST' }); },
+    adminToggleAdmin(userId) { return this.request(`/auth/admin/users/${userId}/toggle-admin`, { method: 'POST' }); },
 };
 window.API = API;

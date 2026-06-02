@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from config import ADMIN_USERNAME
 from models.database_models import User, UserSession
 
 logger = logging.getLogger(__name__)
@@ -67,12 +68,17 @@ def register_user(db: Session, username: str, password: str) -> dict:
     # 哈希密码
     password_hash, salt = _hash_password(password)
 
+    # 判断是否为管理员：第一个用户 或 匹配 ADMIN_USERNAME 环境变量
+    is_first_user = db.query(User).count() == 0
+    is_admin = is_first_user or (ADMIN_USERNAME and username == ADMIN_USERNAME)
+
     # 创建用户
     user = User(
         username=username,
         password_hash=password_hash,
         salt=salt,
         display_name=username,
+        is_admin=is_admin,
     )
     db.add(user)
     db.flush()  # 获取 user.id
@@ -207,6 +213,59 @@ def save_avatar(db: Session, user: User, avatar_url: str) -> None:
     logger.info(f"头像已更新: {user.username} -> {avatar_url}")
 
 
+# ============ 管理员用户管理 ============
+
+def admin_list_users(db: Session) -> list[dict]:
+    """管理员获取所有用户列表"""
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [_user_to_dict(u) for u in users]
+
+
+def admin_delete_user(db: Session, user_id: int) -> None:
+    """管理员删除用户"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("用户不存在")
+    if user.is_admin:
+        admin_count = db.query(User).filter(User.is_admin == True).count()
+        if admin_count <= 1:
+            raise ValueError("不能删除唯一的管理员账户")
+    # 删除用户会话
+    db.query(UserSession).filter(UserSession.user_id == user_id).delete()
+    # 删除用户
+    db.query(User).filter(User.id == user_id).delete()
+    db.commit()
+    logger.info(f"管理员删除了用户: {user.username} (ID: {user_id})")
+
+
+def admin_reset_user_password(db: Session, user_id: int) -> dict:
+    """管理员重置用户密码"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("用户不存在")
+    new_password = secrets.token_hex(4)
+    password_hash, salt = _hash_password(new_password)
+    user.password_hash = password_hash
+    user.salt = salt
+    db.commit()
+    logger.info(f"管理员重置了用户 {user.username} 的密码")
+    return {"username": user.username, "new_password": new_password}
+
+
+def admin_toggle_admin(db: Session, user_id: int) -> dict:
+    """管理员切换用户的管理员状态"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("用户不存在")
+    admin_count = db.query(User).filter(User.is_admin == True).count()
+    if user.is_admin and admin_count <= 1:
+        raise ValueError("不能取消唯一的管理员权限")
+    user.is_admin = not user.is_admin
+    db.commit()
+    logger.info(f"管理员切换了用户 {user.username} 的管理员状态: {user.is_admin}")
+    return _user_to_dict(user)
+
+
 def _user_to_dict(user: User) -> dict:
     """User ORM 对象转字典"""
     return {
@@ -215,5 +274,6 @@ def _user_to_dict(user: User) -> dict:
         "email": user.email or "",
         "display_name": user.display_name or user.username,
         "avatar_url": user.avatar_url or "",
+        "is_admin": bool(user.is_admin),
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }

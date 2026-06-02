@@ -282,6 +282,7 @@ class UserInfo(BaseModel):
     email: str = Field("", description="邮箱")
     display_name: str = Field("", description="显示名称")
     avatar_url: str = Field("", description="头像URL")
+    is_admin: bool = Field(False, description="是否为管理员")
     created_at: Optional[str] = Field(None, description="注册时间")
 
 

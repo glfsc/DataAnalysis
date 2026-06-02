@@ -231,6 +231,9 @@ const Auth = {
             } else if (action === 'settings') {
                 if (dropdown) dropdown.style.display = 'none';
                 this._showSettingsModal();
+            } else if (action === 'admin') {
+                if (dropdown) dropdown.style.display = 'none';
+                this._showAdminPanel();
             } else if (action === 'logout') {
                 if (dropdown) dropdown.style.display = 'none';
                 this.logout();
@@ -268,6 +271,12 @@ const Auth = {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                         <span>设置</span>
                     </div>
+                    ${userData.is_admin ? `
+                    <div class="user-dropdown-item" data-action="admin" style="color:var(--warning);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        <span>用户管理</span>
+                    </div>
+                    ` : ''}
                     <div class="user-dropdown-item user-dropdown-item-danger" data-action="logout">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                         <span>退出登录</span>
@@ -562,9 +571,124 @@ const Auth = {
     _hideSettingsModal() {
         const o = document.getElementById('settingsModalOverlay');
         if (o) o.remove();
-        // 同时清理裁剪UI
         const crop = document.getElementById('avatarCropOverlay');
         if (crop) crop.remove();
+    },
+
+    /* ========== 管理员用户管理面板 ========== */
+    _showAdminPanel() {
+        this._hideAdminPanel();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'auth-modal-overlay';
+        overlay.id = 'adminPanelOverlay';
+        overlay.innerHTML = `
+            <div class="auth-modal admin-panel-modal glass-card">
+                <button class="auth-modal-close" id="btnAdminClose">&times;</button>
+                <h2 style="margin-bottom:4px;text-align:center;color:#fff;">用户管理</h2>
+                <p style="text-align:center;color:var(--text-muted);font-size:0.82em;margin-bottom:16px;">管理员面板 · 管理系统用户</p>
+                <div id="adminUserList" style="max-height:50vh;overflow-y:auto;">
+                    <div style="text-align:center;padding:20px;color:var(--text-muted);">加载中...</div>
+                </div>
+                <div id="adminMsg" style="display:none;padding:8px 12px;border-radius:6px;margin-top:10px;font-size:0.85em;text-align:center;"></div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        overlay.querySelector('#btnAdminClose').addEventListener('click', () => this._hideAdminPanel());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) this._hideAdminPanel(); });
+
+        this._loadAdminUsers(overlay);
+    },
+
+    _hideAdminPanel() {
+        const o = document.getElementById('adminPanelOverlay');
+        if (o) o.remove();
+    },
+
+    async _loadAdminUsers(overlay) {
+        const listEl = overlay.querySelector('#adminUserList');
+        try {
+            const result = await API.adminListUsers();
+            if (!result.users || result.users.length === 0) {
+                listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">暂无用户</div>';
+                return;
+            }
+            listEl.innerHTML = result.users.map(u => {
+                const initial = (u.display_name || u.username)[0].toUpperCase();
+                return `
+                <div class="admin-user-row" data-uid="${u.id}">
+                    <div class="admin-user-avatar">${initial}</div>
+                    <div class="admin-user-info">
+                        <div class="admin-user-name">${Utils.escapeHtml(u.display_name || u.username)} ${u.is_admin ? '<span style="color:var(--warning);font-size:0.7em;">👑管理</span>' : ''}</div>
+                        <div class="admin-user-meta">@${Utils.escapeHtml(u.username)} · ${u.email || '无邮箱'} · ${u.created_at ? new Date(u.created_at).toLocaleDateString('zh-CN') : '--'}</div>
+                    </div>
+                    <div class="admin-user-actions">
+                        <button class="btn-sm admin-btn-reset" data-uid="${u.id}" title="重置密码">🔑</button>
+                        ${u.id !== this.state.user.id ? `<button class="btn-sm admin-btn-toggle" data-uid="${u.id}" title="${u.is_admin ? '取消管理员' : '设为管理员'}">${u.is_admin ? '👤' : '👑'}</button>` : ''}
+                        ${u.id !== this.state.user.id ? `<button class="btn-sm btn-sm-danger admin-btn-delete" data-uid="${u.id}" title="删除用户">🗑</button>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+
+            // 绑定操作按钮
+            listEl.querySelectorAll('.admin-btn-reset').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const uid = parseInt(btn.dataset.uid);
+                    btn.disabled = true;
+                    try {
+                        const r = await API.adminResetPassword(uid);
+                        this._showAdminMsg(overlay, `密码已重置 · 新密码: <code>${r.new_password}</code>`, 'success');
+                    } catch (err) {
+                        this._showAdminMsg(overlay, err.message, 'error');
+                    }
+                    btn.disabled = false;
+                });
+            });
+
+            listEl.querySelectorAll('.admin-btn-toggle').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const uid = parseInt(btn.dataset.uid);
+                    btn.disabled = true;
+                    try {
+                        await API.adminToggleAdmin(uid);
+                        this._loadAdminUsers(overlay);
+                    } catch (err) {
+                        this._showAdminMsg(overlay, err.message, 'error');
+                    }
+                    btn.disabled = false;
+                });
+            });
+
+            listEl.querySelectorAll('.admin-btn-delete').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const uid = parseInt(btn.dataset.uid);
+                    if (!confirm('确定要删除该用户吗？此操作不可撤销。')) return;
+                    btn.disabled = true;
+                    try {
+                        await API.adminDeleteUser(uid);
+                        this._loadAdminUsers(overlay);
+                        this._showAdminMsg(overlay, '用户已删除', 'success');
+                    } catch (err) {
+                        this._showAdminMsg(overlay, err.message, 'error');
+                    }
+                    btn.disabled = false;
+                });
+            });
+        } catch (err) {
+            listEl.innerHTML = `<div style="text-align:center;padding:20px;color:var(--danger);">加载失败: ${err.message}</div>`;
+        }
+    },
+
+    _showAdminMsg(overlay, msg, type) {
+        const el = overlay.querySelector('#adminMsg');
+        if (!el) return;
+        el.innerHTML = msg;
+        el.style.display = 'block';
+        el.style.background = type === 'error' ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)';
+        el.style.border = `1px solid ${type === 'error' ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.25)'}`;
+        el.style.color = type === 'error' ? 'var(--danger)' : 'var(--success)';
+        setTimeout(() => { el.style.display = 'none'; }, 5000);
     },
 
     /* ========== 头像裁剪上传 ========== */

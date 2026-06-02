@@ -17,6 +17,7 @@ class User(Base):
     email = Column(String(120), default="", comment="邮箱")
     avatar_url = Column(String(500), default="", comment="头像URL")
     display_name = Column(String(100), default="", comment="显示名称")
+    is_admin = Column(Boolean, default=False, comment="是否为管理员")
     created_at = Column(DateTime, default=datetime.utcnow, comment="注册时间")
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
 

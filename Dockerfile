@@ -21,14 +21,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制项目所有文件
 COPY . .
 
-# 创建 uploads 目录（确保存在）
-RUN mkdir -p backend/uploads backend/uploads/avatars
+# 创建持久化数据目录（运行时由 Railway 卷挂载覆盖）
+# 在 Railway 中配置卷挂载到 /data，并设置环境变量 DATA_DIR=/data
+RUN mkdir -p /data/uploads/avatars
 
 # 启动脚本权限
 RUN chmod +x start.sh
 
 # 暴露端口（Railway 通过 PORT 环境变量注入）
 EXPOSE 8000
+
+# 设置默认环境变量
+ENV DATA_DIR=/data
 
 # 启动服务
 CMD ["./start.sh"]

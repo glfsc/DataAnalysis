@@ -8,17 +8,22 @@ from pathlib import Path
 # 项目根目录
 BASE_DIR = Path(__file__).resolve().parent
 
-# 数据库配置
-DATABASE_URL = f"sqlite:///{BASE_DIR}/data_analysis.db"
+# 持久化数据目录（Railway 卷挂载点）
+# 设置 DATA_DIR 环境变量指向持久卷，如 /data
+DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR)))
 
-# 文件上传配置
-UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+# 数据库配置 — 存储在持久化目录
+DB_PATH = DATA_DIR / "data_analysis.db"
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+# 文件上传配置 — 存储在持久化目录
+UPLOAD_DIR = DATA_DIR / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 
-# 头像上传配置
-AVATAR_DIR = BASE_DIR / "uploads" / "avatars"
+# 头像上传配置 — 存储在持久化目录
+AVATAR_DIR = DATA_DIR / "uploads" / "avatars"
 AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
 ALLOWED_AVATAR_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -47,3 +52,6 @@ PORT = int(os.getenv("PORT", "8000"))
 # AI助手配置
 AI_ENABLED = True
 AI_MAX_HISTORY = 20
+
+# 管理员配置
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "")

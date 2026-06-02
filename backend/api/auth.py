@@ -29,6 +29,10 @@ from services.auth_service import (
     logout_user,
     get_current_user,
     save_avatar,
+    admin_list_users,
+    admin_delete_user,
+    admin_reset_user_password,
+    admin_toggle_admin,
 )
 
 logger = logging.getLogger(__name__)
@@ -263,3 +267,74 @@ async def upload_avatar(
         "message": "头像上传成功",
         "avatar_url": avatar_url,
     }
+
+
+# ============ 管理员用户管理 API ============
+
+def require_admin(user=Depends(get_auth_user)):
+    """管理员权限依赖"""
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return user
+
+
+@router.get("/admin/users", summary="管理员 — 获取所有用户列表")
+async def list_users(
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
+    """管理员获取所有注册用户列表"""
+    users = admin_list_users(db)
+    return {"users": users, "total": len(users)}
+
+
+@router.delete("/admin/users/{user_id}", summary="管理员 — 删除用户")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
+    """管理员删除指定用户"""
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="不能删除自己")
+    try:
+        admin_delete_user(db, user_id)
+        return {"message": "用户已删除"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/admin/users/{user_id}/reset-password", summary="管理员 — 重置用户密码")
+async def reset_user_password(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
+    """管理员重置指定用户的密码"""
+    try:
+        result = admin_reset_user_password(db, user_id)
+        return {
+            "message": "密码已重置",
+            "username": result["username"],
+            "new_password": result["new_password"],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/admin/users/{user_id}/toggle-admin", summary="管理员 — 切换管理员权限")
+async def toggle_user_admin(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
+    """管理员切换指定用户的管理员权限"""
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="不能修改自己的管理员权限")
+    try:
+        result = admin_toggle_admin(db, user_id)
+        return {"message": "管理员权限已更新", "user": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
