@@ -90,7 +90,74 @@ const API = {
     },
 
     /* ----- AI ----- */
-    askAI(question, fileId) { return this.request('/ai/query', { method: 'POST', body: { question, file_id: fileId } }); },
+    askAI(question, fileId, history) {
+        return this.request('/ai/query', { method: 'POST', body: { question, file_id: fileId, history } });
+    },
+
+    /** AI 流式对话 — 返回 ReadableStream 用于实时显示 */
+    async chatStream(question, fileId, history, onToken, onDone, onError, onModel) {
+        const url = `${this.BASE_URL}/ai/chat`;
+        const token = window.Auth ? window.Auth.getToken() : '';
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream',
+                    'Authorization': token ? `Bearer ${token}` : '',
+                },
+                body: JSON.stringify({ question, file_id: fileId, history }),
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
+                if (onError) onError(err.detail || '请求失败');
+                return;
+            }
+
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // 解析 SSE 事件
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // 最后一行可能不完整
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.type === 'model' && onModel) {
+                                onModel(data.name);
+                            } else if (data.type === 'token' && onToken) {
+                                onToken(data.content);
+                            } else if (data.type === 'done' && onDone) {
+                                onDone();
+                            } else if (data.type === 'error' && onError) {
+                                onError(data.message);
+                            }
+                        } catch (e) { /* ignore parse errors */ }
+                    }
+                }
+            }
+            // 处理缓冲区中剩余的数据
+            if (buffer.startsWith('data: ')) {
+                try {
+                    const data = JSON.parse(buffer.slice(6));
+                    if (data.type === 'done' && onDone) onDone();
+                    if (data.type === 'error' && onError) onError(data.message);
+                } catch (e) { /* ignore */ }
+            }
+        } catch (e) {
+            if (onError) onError('网络连接失败: ' + e.message);
+        }
+    },
 
     /* ----- AI配置 ----- */
     getAIConfigs() { return this.request('/ai-config/list'); },
@@ -99,6 +166,7 @@ const API = {
     deleteAIConfig(id) { return this.request(`/ai-config/${id}`, { method: 'DELETE' }); },
     enableAIConfig(id) { return this.request(`/ai-config/${id}/enable`, { method: 'POST' }); },
     disableAIConfig(id) { return this.request(`/ai-config/${id}/disable`, { method: 'POST' }); },
+    testAIConfig(id) { return this.request(`/ai-config/${id}/test`, { method: 'POST' }); },
 
     /* ----- CRUD ----- */
     updateCell(fileId, rowIndex, column, value) { return this.request('/data/cell', { method: 'PUT', body: { file_id: fileId, row_index: rowIndex, column, value } }); },

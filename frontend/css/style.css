@@ -834,6 +834,39 @@ body {
 .ai-config-row { transition: all var(--transition); }
 .ai-config-row:hover { background: rgba(255,255,255,0.06) !important; }
 
+/* ========== AI 状态栏 ========== */
+.ai-status-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 8px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 8px; font-size: 0.82em; color: var(--text-muted);
+}
+.ai-status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-muted); flex-shrink: 0;
+}
+.ai-status-dot.active {
+    background: var(--success);
+    box-shadow: 0 0 8px rgba(16,185,129,0.5);
+    animation: aiPulse 2s ease-in-out infinite;
+}
+@keyframes aiPulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ========== AI 流式输出 ========== */
+.ai-streaming-bubble { position: relative; }
+.ai-cursor-blink {
+    display: inline-block; color: var(--neon-primary);
+    font-size: 0.9em; animation: cursorBlink 0.8s step-end infinite;
+    vertical-align: middle; margin-left: 2px;
+}
+@keyframes cursorBlink {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
 /* ========== 表格列头编辑 ========== */
 #vizDataTable th.editing { padding: 2px !important; }
 #vizDataTable th.editing input {

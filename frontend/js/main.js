@@ -7,6 +7,8 @@ const App = {
         files:{}, fileOrder:[], selectedIds:[], currentFileId:null,
         currentView:'dashboard', currentStep:'upload', currentChart:null, currentAnalysisAction:null,
         editedData:null, // 可视化编辑中的数据
+        aiModelName:null, // 当前使用的AI模型名称
+        aiChatHistory:[], // AI对话历史
     },
 
     init() {
@@ -994,7 +996,26 @@ const App = {
         ed.querySelector('#chartEditCancel').addEventListener('click',()=>ed.remove());
         input.addEventListener('keydown',(e)=>{if(e.key==='Enter')applyEdit();if(e.key==='Escape')ed.remove();});
     },
-    _exportChartPNG(){if(!this.state.currentChart){Utils.toast('没有可导出的图表','warning');return;}const dom=document.getElementById('chartStage').querySelector('div');if(!dom)return;const inst=echarts.getInstanceByDom(dom);if(inst){Utils.downloadFile(inst.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#1a1645'}),'chart.png');Utils.toast('图表已导出','success');}},
+    _exportChartPNG(){
+        if(!this.state.currentChart){Utils.toast('没有可导出的图表','warning');return;}
+        const dom=document.getElementById('chartStage').querySelector('div');if(!dom)return;
+        const inst=echarts.getInstanceByDom(dom);if(!inst){Utils.toast('图表实例未找到','error');return;}
+        // 临时隐藏 dataZoom 滑块再导出
+        const curOpt=inst.getOption();
+        const hadDataZoom=curOpt.dataZoom&&curOpt.dataZoom.length>0;
+        if(hadDataZoom){
+            inst.setOption({dataZoom:[{show:false}]},false);
+        }
+        // 延迟导出以等待渲染
+        setTimeout(()=>{
+            Utils.downloadFile(inst.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#1a1645'}),'chart.png');
+            // 恢复 dataZoom
+            if(hadDataZoom){
+                inst.setOption({dataZoom:[{show:true}]},false);
+            }
+            Utils.toast('图表已导出','success');
+        },150);
+    },
     _applyAxisDomain(){
         const inst=Charts.getInstance();
         if(!inst||inst.isDisposed()){Utils.toast('请先生成图表','warning');return;}
@@ -1212,9 +1233,121 @@ const App = {
         document.getElementById('aiInput').addEventListener('keydown',e=>{if(e.key==='Enter')this._sendAIMessage();});
         const btnAIConfig=document.getElementById('btnAIConfig');
         if(btnAIConfig)btnAIConfig.addEventListener('click',()=>this._showAIConfigModal());
+        // 监听切换到AI视图时刷新状态
+        document.querySelector('.nav-item[data-view="ai-assistant"]')?.addEventListener('click',()=>{
+            setTimeout(()=>this._refreshAIStatus(),100);
+        });
     },
-    async _sendAIMessage(){const inp=document.getElementById('aiInput');const msg=inp.value.trim();if(!msg)return;this._addAIMessage('user',msg);inp.value='';const aid=this._getActiveFileId();const useId=aid?(this.state.files[aid]?.cleanedFileId||aid):null;try{const r=await API.askAI(msg,useId);if(r.reply)this._addAIMessage('bot',r.reply);if(r.chart_data){this.state.currentChart=r.chart_data;this.switchView('visualization');setTimeout(()=>{document.getElementById('chartStage').innerHTML='';Charts.renderChart('chartStage',r.chart_data);},400);}}catch(err){this._addAIMessage('bot','抱歉: '+err.message);}},
-    _addAIMessage(role,text){const area=document.getElementById('aiChatArea');const div=document.createElement('div');div.className='ai-msg '+role;div.innerHTML='<div class="ai-avatar">'+(role==='user'?'You':'AI')+'</div><div class="ai-bubble"><p>'+text.replace(/\n/g,'<br>')+'</p></div>';area.appendChild(div);area.scrollTop=area.scrollHeight;},
+    _sendAIMessage(){
+        const inp=document.getElementById('aiInput');
+        const msg=inp.value.trim();
+        if(!msg)return;
+        const aid=this._getActiveFileId();
+        const useId=aid?(this.state.files[aid]?.cleanedFileId||aid):null;
+        if(!useId){Utils.toast('请先在仪表盘选择一个数据文件','warning');return;}
+
+        // 添加用户消息
+        this._addAIMessage('user',msg);
+        this.state.aiChatHistory.push({role:'user',content:msg});
+        inp.value='';
+
+        // 创建AI消息容器（流式更新）
+        const area=document.getElementById('aiChatArea');
+        const div=document.createElement('div');
+        div.className='ai-msg bot';
+        div.innerHTML='<div class="ai-avatar">AI</div><div class="ai-bubble ai-streaming-bubble"><p class="ai-streaming-text"></p><span class="ai-cursor-blink">▊</span></div>';
+        area.appendChild(div);
+        area.scrollTop=area.scrollHeight;
+        const textEl=div.querySelector('.ai-streaming-text');
+        const cursorEl=div.querySelector('.ai-cursor-blink');
+
+        let fullText='';
+        const onToken=(token)=>{
+            fullText+=token;
+            // 渲染 Markdown 风格的文本
+            textEl.innerHTML=this._formatAIText(fullText);
+            area.scrollTop=area.scrollHeight;
+        };
+        const onDone=()=>{
+            // 移除闪烁光标
+            if(cursorEl)cursorEl.remove();
+            div.querySelector('.ai-bubble').classList.remove('ai-streaming-bubble');
+            textEl.innerHTML=this._formatAIText(fullText);
+            this.state.aiChatHistory.push({role:'assistant',content:fullText});
+            // 限制历史长度
+            if(this.state.aiChatHistory.length>30)this.state.aiChatHistory=this.state.aiChatHistory.slice(-30);
+            area.scrollTop=area.scrollHeight;
+        };
+        const onError=(errMsg)=>{
+            textEl.innerHTML='<span style="color:var(--danger);">❌ '+Utils.escapeHtml(errMsg)+'</span>';
+            if(cursorEl)cursorEl.remove();
+            div.querySelector('.ai-bubble').classList.remove('ai-streaming-bubble');
+        };
+        const onModel=(modelName)=>{
+            this.state.aiModelName=modelName;
+            this._updateAIModelLabel(modelName);
+        };
+
+        // 使用流式API
+        API.chatStream(msg,useId,this.state.aiChatHistory.slice(0,-1),onToken,onDone,onError,onModel);
+    },
+
+    /** 简单的 Markdown 格式化 */
+    _formatAIText(text){
+        let html=Utils.escapeHtml(text);
+        // 代码块 ```
+        html=html.replace(/```(\w*)\n?([\s\S]*?)```/g,'<pre style="background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;overflow-x:auto;font-size:0.85em;"><code>$2</code></pre>');
+        // 行内代码 `
+        html=html.replace(/`([^`]+)`/g,'<code style="background:rgba(99,102,241,0.2);padding:2px 5px;border-radius:3px;font-size:0.9em;">$1</code>');
+        // 粗体 **
+        html=html.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+        // 标题 ###
+        html=html.replace(/^### (.+)$/gm,'<h4 style="margin:8px 0 4px;color:var(--neon-primary);">$1</h4>');
+        html=html.replace(/^## (.+)$/gm,'<h3 style="margin:10px 0 6px;color:var(--neon-cyan);">$1</h3>');
+        // 无序列表
+        html=html.replace(/^- (.+)$/gm,'<li>$1</li>');
+        html=html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        // 换行
+        html=html.replace(/\n\n/g,'<br><br>');
+        html=html.replace(/\n/g,'<br>');
+        return html;
+    },
+
+    _addAIMessage(role,text){
+        const area=document.getElementById('aiChatArea');
+        const div=document.createElement('div');
+        div.className='ai-msg '+role;
+        div.innerHTML='<div class="ai-avatar">'+(role==='user'?'You':'AI')+'</div><div class="ai-bubble">'+this._formatAIText(text)+'</div>';
+        area.appendChild(div);
+        area.scrollTop=area.scrollHeight;
+    },
+
+    /** 刷新AI状态显示 */
+    async _refreshAIStatus(){
+        try{
+            const result=await API.getAIConfigs();
+            const configs=result.configs||[];
+            const active=configs.find(c=>c.is_enabled);
+            const dot=document.getElementById('aiStatusDot');
+            const text=document.getElementById('aiStatusText');
+            if(active){
+                if(dot)dot.className='ai-status-dot active';
+                if(text)text.textContent='模型: '+active.model_name+' | 配置: '+active.name;
+                this.state.aiModelName=active.model_name;
+                this._updateAIModelLabel(active.model_name);
+            }else{
+                if(dot)dot.className='ai-status-dot';
+                if(text)text.textContent=configs.length>0?'已配置 '+configs.length+' 个方案，但未启用':'未配置 AI 模型';
+                this.state.aiModelName=null;
+                document.getElementById('aiModelLabel').textContent='未配置模型';
+            }
+        }catch(e){/* ignore */}
+    },
+
+    _updateAIModelLabel(modelName){
+        const el=document.getElementById('aiModelLabel');
+        if(el)el.textContent='当前模型: '+modelName;
+    },
 
     /* ========== AI配置弹窗 ========== */
     _showAIConfigModal(){
@@ -1324,6 +1457,7 @@ const App = {
                             ? '<button class="btn-sm" data-ai-action="disable" data-ai-id="'+c.id+'" style="font-size:0.75em;color:var(--warning);">停用</button>'
                             : '<button class="btn-sm" data-ai-action="enable" data-ai-id="'+c.id+'" style="font-size:0.75em;color:var(--success);">启用</button>'
                         }
+                        <button class="btn-sm" data-ai-action="test" data-ai-id="${c.id}" style="font-size:0.75em;" title="测试连接">🔌</button>
                         <button class="btn-sm" data-ai-action="edit" data-ai-id="${c.id}" data-ai-name="${Utils.escapeHtml(c.name)}" data-ai-url="${Utils.escapeHtml(c.base_url)}" data-ai-model="${Utils.escapeHtml(c.model_name)}" style="font-size:0.75em;">✏️</button>
                         <button class="btn-sm btn-sm-danger" data-ai-action="delete" data-ai-id="${c.id}" style="font-size:0.75em;">🗑</button>
                     </div>
@@ -1337,23 +1471,47 @@ const App = {
                     const action=btn.dataset.aiAction;
                     try{
                         if(action==='enable'){
-                            await API.enableAIConfig(id);
-                            Utils.toast('AI配置已启用','success');
-                            this._refreshAIConfigList(overlay);
+                            btn.disabled=true;btn.textContent='测试中...';
+                            try{
+                                const r=await API.enableAIConfig(id);
+                                Utils.toast(r.message+' | 模型: '+r.model,'success');
+                                this._refreshAIConfigList(overlay);
+                                this._refreshAIStatus();
+                            }catch(err){
+                                Utils.toast('启用失败: '+err.message,'error');
+                            }
+                            btn.disabled=false;btn.textContent='启用';
+                        }else if(action==='test'){
+                            btn.disabled=true;btn.textContent='...';
+                            try{
+                                const r=await API.testAIConfig(id);
+                                if(r.success){
+                                    Utils.toast('✅ '+r.message,'success');
+                                    // 显示完整消息
+                                    const msgEl=overlay.querySelector('#aiCfgMsg');
+                                    if(msgEl){msgEl.innerHTML='✅ 连接成功！模型: <strong>'+Utils.escapeHtml(r.model||'')+'</strong>';msgEl.style.display='block';}
+                                }else{
+                                    Utils.toast('❌ '+r.message,'error');
+                                    const msgEl=overlay.querySelector('#aiCfgMsg');
+                                    if(msgEl){msgEl.innerHTML='<span style="color:var(--danger);">❌ '+Utils.escapeHtml(r.message)+'</span>';msgEl.style.display='block';}
+                                }
+                            }catch(err){Utils.toast('测试失败: '+err.message,'error');}
+                            btn.disabled=false;btn.textContent='🔌';
                         }else if(action==='disable'){
                             await API.disableAIConfig(id);
                             Utils.toast('AI配置已停用','success');
                             this._refreshAIConfigList(overlay);
+                            this._refreshAIStatus();
                         }else if(action==='delete'){
                             if(!confirm('确定删除此配置吗？'))return;
                             await API.deleteAIConfig(id);
                             Utils.toast('配置已删除','success');
                             this._refreshAIConfigList(overlay);
+                            this._refreshAIStatus();
                         }else if(action==='edit'){
                             document.getElementById('aiConfigForm').style.display='block';
                             document.getElementById('aiCfgEditId').value=id;
                             document.getElementById('aiCfgName').value=btn.dataset.aiName||'';
-                            // Key 不回填（需要重新输入）
                             document.getElementById('aiCfgKey').value='';
                             document.getElementById('aiCfgKey').placeholder='留空则不修改';
                             document.getElementById('aiCfgUrl').value=btn.dataset.aiUrl||'';

@@ -152,13 +152,13 @@ async def delete_config(
     return {"message": "配置已删除"}
 
 
-@router.post("/{config_id}/enable", summary="启用AI配置")
+@router.post("/{config_id}/enable", summary="启用AI配置（含连接测试）")
 async def enable_config(
     config_id: int,
     db: Session = Depends(get_db),
     user_id: int = Depends(_get_current_user_id),
 ):
-    """启用指定的AI配置方案（同时停用其他配置）"""
+    """启用指定的AI配置方案（同时停用其他配置），并测试连接"""
     config = db.query(AIConfig).filter(
         AIConfig.id == config_id,
         AIConfig.user_id == user_id,
@@ -166,14 +166,55 @@ async def enable_config(
     if not config:
         raise HTTPException(status_code=404, detail="配置不存在")
 
+    # 先测试连接
+    from services.ai_agent_service import AIAgentService
+    test_result = await AIAgentService.test_connection({
+        "api_key": config.api_key,
+        "base_url": config.base_url,
+        "model_name": config.model_name,
+    })
+
+    if not test_result["success"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"连接测试失败: {test_result['message']}",
+        )
+
     # 停用该用户所有配置
     db.query(AIConfig).filter(AIConfig.user_id == user_id).update({"is_enabled": False})
     # 启用选中配置
     config.is_enabled = True
     db.commit()
 
-    logger.info(f"用户 {user_id} 启用了AI配置: {config.name}")
-    return {"message": f"已启用配置: {config.name}"}
+    logger.info(f"用户 {user_id} 启用了AI配置: {config.name} (模型: {config.model_name})")
+    return {
+        "message": f"已启用配置: {config.name}",
+        "connection_test": test_result["message"],
+        "model": config.model_name,
+    }
+
+
+@router.post("/{config_id}/test", summary="测试AI配置连接")
+async def test_config(
+    config_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(_get_current_user_id),
+):
+    """测试指定AI配置的连接是否可用"""
+    config = db.query(AIConfig).filter(
+        AIConfig.id == config_id,
+        AIConfig.user_id == user_id,
+    ).first()
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+
+    from services.ai_agent_service import AIAgentService
+    result = await AIAgentService.test_connection({
+        "api_key": config.api_key,
+        "base_url": config.base_url,
+        "model_name": config.model_name,
+    })
+    return result
 
 
 @router.post("/{config_id}/disable", summary="停用AI配置")

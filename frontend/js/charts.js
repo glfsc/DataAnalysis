@@ -186,6 +186,7 @@ const Charts = {
         const self = this;
         let pressTimer = null;
         let dragInfo = null;
+        let hasMoved = false;
 
         // 清理上一次的监听器
         if (this._dragCleanup) {
@@ -194,64 +195,59 @@ const Charts = {
         }
 
         const onMouseDown = (e) => {
-            // 仅在图表区域内处理
             if (!chartDom.contains(e.target)) return;
             const rect = chartDom.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            // 检测鼠标下的 ECharts 组件
             if (!self._instance || self._instance.isDisposed()) return;
             try {
-                // 使用 getZr() 检测点击位置所在的元素
-                const handler = self._instance.getZr().handler;
-                // 通过坐标判断可能点击的组件
                 const opt = self._currentOption;
                 if (!opt) return;
 
                 let targetComp = null;
-                // 检测标题区域
+                // 检测标题区域（增大可点击范围）
                 if (opt.title && opt.title.show !== false) {
                     const titleOpt = opt.title;
                     const titleTop = self._getPixelValue(titleOpt.top, rect.height, 10);
                     const titleLeft = self._getPixelValueFromLeft(titleOpt.left, rect.width, 'center');
-                    // 估算标题区域
-                    const titleHeight = (titleOpt.textStyle?.fontSize || 14) + 20;
-                    const titleWidth = ((titleOpt.text || '').length * (titleOpt.textStyle?.fontSize || 14) * 0.7) + 40;
+                    const titleHeight = ((titleOpt.textStyle?.fontSize || 14) + 20);
+                    const titleWidth = Math.max(((titleOpt.text || '').length * (titleOpt.textStyle?.fontSize || 14) * 0.6) + 80, 200);
                     if (x >= titleLeft - titleWidth/2 && x <= titleLeft + titleWidth/2 &&
-                        y >= titleTop && y <= titleTop + titleHeight) {
+                        y >= titleTop - 8 && y <= titleTop + titleHeight + 8) {
                         targetComp = 'title';
                     }
                 }
-                // 检测图例区域（通常在底部）
+                // 检测图例区域
                 if (!targetComp && opt.legend && opt.legend.show !== false) {
                     const legendOpt = opt.legend;
                     const legendBottom = legendOpt.bottom !== undefined ? self._getPixelValueFromBottom(legendOpt.bottom, rect.height, 0) : 0;
-                    const legendTop = rect.height - legendBottom - 30;
+                    const legendTop = rect.height - legendBottom - 35;
                     const legendLeft = self._getPixelValueFromLeft(legendOpt.left, rect.width, 'center');
-                    const legendWidth = 200; // 估算
+                    const legendWidth = Math.max(rect.width * 0.6, 250);
                     if (x >= legendLeft - legendWidth/2 && x <= legendLeft + legendWidth/2 &&
-                        y >= legendTop && y <= rect.height - legendBottom + 5) {
+                        y >= legendTop - 5 && y <= rect.height - legendBottom + 10) {
                         targetComp = 'legend';
                     }
                 }
-                // 检测 dataZoom 区域（底部滑块）
+                // 检测 dataZoom 区域
                 if (!targetComp && opt.dataZoom && opt.dataZoom.length > 0) {
                     const dz = opt.dataZoom[0];
                     const dzBottom = dz.bottom !== undefined ? dz.bottom : 5;
-                    const dzHeight = dz.height || 20;
+                    const dzHeight = (dz.height || 20) + 10;
                     const dzTop = rect.height - dzBottom - dzHeight;
-                    const dzLeft = (opt.grid && opt.grid.length > 0 ? (opt.grid[0].left || 60) : 60);
-                    const dzRight = (opt.grid && opt.grid.length > 0 ? (opt.grid[0].right || 40) : 40);
-                    const dzWidth = rect.width - dzLeft - dzRight;
-                    if (x >= dzLeft && x <= dzLeft + dzWidth && y >= dzTop - 5 && y <= rect.height - dzBottom + 5) {
+                    const dzLeftNum = typeof (opt.grid?.[0]?.left) === 'number' ? opt.grid[0].left : 60;
+                    const dzRightNum = typeof (opt.grid?.[0]?.right) === 'number' ? opt.grid[0].right : 40;
+                    const dzWidth = rect.width - dzLeftNum - dzRightNum;
+                    if (x >= dzLeftNum - 10 && x <= dzLeftNum + dzWidth + 10 && y >= dzTop - 8 && y <= rect.height - Math.max(dzBottom - 5, 0)) {
                         targetComp = 'dataZoom';
                     }
                 }
 
                 if (targetComp) {
                     chartDom.style.cursor = 'grab';
-                    // 长按 400ms 开始拖拽
+                    hasMoved = false;
+                    // 缩短长按时间到250ms，提升灵敏度
                     pressTimer = setTimeout(() => {
                         chartDom.style.cursor = 'grabbing';
                         dragInfo = {
@@ -266,26 +262,23 @@ const Charts = {
                             origBottom: targetComp === 'dataZoom' ? (self._currentOption.dataZoom?.[0]?.bottom ?? 5) :
                                         targetComp === 'legend' ? self._currentOption.legend.bottom : undefined,
                         };
-                        // Show toast hint
                         if (typeof Utils !== 'undefined' && Utils.toast) {
                             Utils.toast('拖动以重新定位' + (targetComp === 'title' ? '标题' : targetComp === 'legend' ? '图例' : '滑动条'), 'info');
                         }
-                    }, 400);
+                    }, 250);
                 }
-            } catch (err) {
-                // getZr may fail, ignore
-            }
+            } catch (err) { /* ignore */ }
         };
 
         const onMouseMove = (e) => {
             if (!dragInfo) return;
+            hasMoved = true;
             const dx = e.clientX - dragInfo.startX;
             const dy = e.clientY - dragInfo.startY;
             const rect = dragInfo.chartRect;
 
             const update = {};
             if (dragInfo.componentType === 'title') {
-                // 标题：计算新的 left, top 像素值
                 const curLeft = self._getPixelValueFromLeft(dragInfo.origLeft, rect.width, 'center');
                 const curTop = self._getPixelValue(dragInfo.origTop, rect.height, 10);
                 update.title = {
@@ -295,7 +288,6 @@ const Charts = {
             } else if (dragInfo.componentType === 'legend') {
                 const curBottom = dragInfo.origBottom !== undefined ? dragInfo.origBottom : 0;
                 const curLeft = self._getPixelValueFromLeft(dragInfo.origLeft, rect.width, 'center');
-                // 图例：调整 left 和 bottom
                 const newBottom = Math.max(0, Math.min(rect.height - 20, curBottom - dy));
                 update.legend = {
                     left: Math.max(0, Math.min(rect.width, curLeft + dx)),
@@ -313,7 +305,6 @@ const Charts = {
 
             if (Object.keys(update).length > 0) {
                 self._instance.setOption(update);
-                // 更新缓存
                 if (self._currentOption) {
                     Object.assign(self._currentOption, update);
                 }
@@ -324,8 +315,12 @@ const Charts = {
             clearTimeout(pressTimer);
             pressTimer = null;
             if (dragInfo) {
+                if (!hasMoved) {
+                    // 没有实际移动，可能是点击操作，不做任何事
+                }
                 chartDom.style.cursor = '';
                 dragInfo = null;
+                hasMoved = false;
             }
         };
 
@@ -335,6 +330,7 @@ const Charts = {
             if (dragInfo) {
                 chartDom.style.cursor = '';
                 dragInfo = null;
+                hasMoved = false;
             }
         };
 
@@ -343,7 +339,6 @@ const Charts = {
         document.addEventListener('mouseup', onMouseUp);
         chartDom.addEventListener('mouseleave', onMouseLeave);
 
-        // 存储清理函数
         this._dragCleanup = () => {
             chartDom.removeEventListener('mousedown', onMouseDown);
             document.removeEventListener('mousemove', onMouseMove);
@@ -546,8 +541,8 @@ const Charts = {
             title: { text: title, left: 'center', triggerEvent: true, textStyle: { color: '#e2e8f0', fontSize: 14 } },
             tooltip: { trigger: ct === 'pie' ? 'item' : 'axis' },
             legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 } },
-            grid: { bottom: 60, left: 60, right: 40, top: 50 },
-            dataZoom: [{ type: 'slider', start: 0, end: 100, bottom: 5, height: 20 }],
+            grid: { bottom: 80, left: 60, right: 40, top: 50 },
+            dataZoom: [{ type: 'slider', start: 0, end: 100, bottom: 10, height: 22 }],
         };
         if (Array.isArray(data) && data.length > 0) {
             const xData = data.map(d => d[xCol] !== undefined ? String(d[xCol]) : String(Object.values(d)[0]));
