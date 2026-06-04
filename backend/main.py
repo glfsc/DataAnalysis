@@ -113,6 +113,19 @@ app.add_middleware(
 )
 
 
+# 禁用静态文件缓存中间件（确保前端更新后浏览器立即生效）
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    # 对前端静态资源禁用缓存
+    if path.endswith(('.html', '.js', '.css')) or path == '/':
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 # 全局异常处理
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
