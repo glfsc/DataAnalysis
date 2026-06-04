@@ -63,7 +63,8 @@ async def list_configs(
             {
                 "id": c.id,
                 "name": c.name,
-                "api_key": c.api_key[:8] + "****" + c.api_key[-4:] if len(c.api_key) > 12 else "****",
+                "api_key_masked": c.api_key[:8] + "****" + c.api_key[-4:] if len(c.api_key) > 12 else "****",
+                "api_key_full": c.api_key,  # 完整key，前端默认隐藏
                 "base_url": c.base_url,
                 "model_name": c.model_name,
                 "is_enabled": c.is_enabled,

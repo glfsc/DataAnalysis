@@ -15,8 +15,11 @@ logger = logging.getLogger(__name__)
 class AIAgentService:
     """AI智能助手服务类：纯 LLM 驱动的智能分析"""
 
-    # 系统提示词 — 专业的商业数据分析助手
-    SYSTEM_PROMPT = """你是一个专业的商业数据分析助手，名为 DataVision AI。你运行在 DataVision Pro 数据分析平台上。
+    @classmethod
+    def _build_system_prompt(cls, model_name: str) -> str:
+        """构建包含当前模型信息的系统提示词"""
+        return f"""你是一个专业的商业数据分析助手，运行在 DataVision Pro 数据分析平台上。
+你当前由 **{model_name}** 模型驱动。当用户询问"你用的是什么模型"或类似问题时，请直接回答你的底层模型是 {model_name}，不要编造其他身份。
 
 ## 你的能力
 - 分析用户上传的表格数据（CSV/Excel）
@@ -183,8 +186,8 @@ class AIAgentService:
         # 构建数据上下文
         data_context = cls.build_data_context(df)
 
-        # 构建消息列表
-        messages = [{"role": "system", "content": cls.SYSTEM_PROMPT}]
+        # 构建消息列表（含模型身份信息）
+        messages = [{"role": "system", "content": cls._build_system_prompt(model_name)}]
 
         # 添加上下文消息（如果有）
         if chat_history:
@@ -281,7 +284,7 @@ class AIAgentService:
         model_name = ai_config["model_name"]
         data_context = cls.build_data_context(df)
 
-        messages = [{"role": "system", "content": cls.SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": cls._build_system_prompt(model_name)}]
         if chat_history:
             for msg in chat_history[-10:]:
                 if msg.get("role") in ("user", "assistant"):

@@ -829,10 +829,33 @@ body {
 .reason-missing { background: rgba(239,68,68,0.15); color: var(--danger); }
 .reason-duplicate { background: rgba(245,158,11,0.15); color: var(--warning); }
 
-/* ========== AI配置弹窗 ========== */
-.ai-config-modal { max-height: 85vh; overflow-y: auto; }
-.ai-config-row { transition: all var(--transition); }
-.ai-config-row:hover { background: rgba(255,255,255,0.06) !important; }
+/* ========== AI配置页面 ========== */
+.ai-config-card { transition: all var(--transition); }
+.ai-config-card:hover { background: rgba(255,255,255,0.05) !important; }
+.ai-badge-active {
+    font-size: 0.75em; padding: 2px 8px; border-radius: 10px;
+    background: rgba(16,185,129,0.15); color: var(--success);
+}
+.ai-badge-inactive {
+    font-size: 0.75em; padding: 2px 8px; border-radius: 10px;
+    background: rgba(255,255,255,0.05); color: var(--text-muted);
+}
+.ai-key-display {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'Courier New', monospace; font-size: 0.85em;
+}
+.ai-key-masked, .ai-key-full {
+    padding: 2px 6px; border-radius: 4px;
+    background: rgba(0,0,0,0.2); word-break: break-all;
+}
+.ai-action-btn {
+    font-size: 0.78em; padding: 4px 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04); color: var(--text-secondary);
+    border-radius: 6px; cursor: pointer; transition: all var(--transition);
+}
+.ai-action-btn:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #fff; }
+.ai-config-form { padding: 20px; }
 
 /* ========== AI 状态栏 ========== */
 .ai-status-bar {

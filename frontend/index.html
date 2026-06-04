@@ -186,6 +186,40 @@
     </div>
 </section>
 
+<!-- ===== AI 模型配置页 ===== -->
+<section class="view" id="view-ai-config">
+    <div class="view-header" style="display:flex;align-items:center;gap:12px;">
+        <button class="btn-sm" id="btnAIConfigBack" style="border-color:rgba(255,255,255,0.2);">← 返回助手</button>
+        <div><h2>AI 模型配置</h2><p class="view-subtitle">管理大语言模型接入方案 · 支持 OpenAI 兼容接口</p></div>
+    </div>
+
+    <!-- 添加/编辑表单 -->
+    <div class="ai-config-form glass-card" id="aiConfigFormPanel" style="display:none;margin-bottom:16px;">
+        <h3 id="aiConfigFormTitle">添加新配置</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="auth-input-group"><label class="form-label">配置名称</label><input type="text" class="form-input" id="aiCfgName" placeholder="例如：我的GPT-4"></div>
+            <div class="auth-input-group"><label class="form-label">模型名称</label><input type="text" class="form-input" id="aiCfgModel" placeholder="例如：gpt-4o / deepseek-chat"></div>
+        </div>
+        <div class="auth-input-group"><label class="form-label">API 地址 URL</label><input type="text" class="form-input" id="aiCfgUrl" placeholder="https://api.openai.com/v1"></div>
+        <div class="auth-input-group"><label class="form-label">API Key</label><input type="password" class="form-input" id="aiCfgKey" placeholder="sk-..."></div>
+        <input type="hidden" id="aiCfgEditId" value="">
+        <div class="auth-error" id="aiCfgFormError" style="display:none;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;">
+            <button class="btn-primary" id="btnSaveAIConfig">保存</button>
+            <button class="btn-sm" id="btnCancelAIConfigForm">取消</button>
+        </div>
+    </div>
+
+    <!-- 配置列表 -->
+    <div class="glass-card" id="aiConfigListContainer">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3>已配置的方案</h3>
+            <button class="btn-primary" id="btnAddAIConfigPage">+ 添加新配置</button>
+        </div>
+        <div id="aiConfigListPage"><div style="text-align:center;padding:20px;color:var(--text-muted);">加载中...</div></div>
+    </div>
+</section>
+
 </main></div></div>
 
 <!-- ===== 数据预览弹窗（全量+滑动条） ===== -->

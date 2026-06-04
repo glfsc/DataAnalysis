@@ -1231,12 +1231,18 @@ const App = {
     _bindAIEvents(){
         document.getElementById('btnAISend').addEventListener('click',()=>this._sendAIMessage());
         document.getElementById('aiInput').addEventListener('keydown',e=>{if(e.key==='Enter')this._sendAIMessage();});
+        // 配置按钮 → 切换到AI配置页面
         const btnAIConfig=document.getElementById('btnAIConfig');
-        if(btnAIConfig)btnAIConfig.addEventListener('click',()=>this._showAIConfigModal());
+        if(btnAIConfig)btnAIConfig.addEventListener('click',()=>this._openAIConfigPage());
+        // 返回按钮
+        const btnBack=document.getElementById('btnAIConfigBack');
+        if(btnBack)btnBack.addEventListener('click',()=>this.switchView('ai-assistant'));
         // 监听切换到AI视图时刷新状态
         document.querySelector('.nav-item[data-view="ai-assistant"]')?.addEventListener('click',()=>{
             setTimeout(()=>this._refreshAIStatus(),100);
         });
+        // 绑定配置页内按钮
+        this._bindAIConfigPageEvents();
     },
     _sendAIMessage(){
         const inp=document.getElementById('aiInput');
@@ -1349,183 +1355,208 @@ const App = {
         if(el)el.textContent='当前模型: '+modelName;
     },
 
-    /* ========== AI配置弹窗 ========== */
-    _showAIConfigModal(){
-        // 移除旧弹窗
-        const old=document.getElementById('aiConfigOverlay');
-        if(old)old.remove();
-
-        const overlay=document.createElement('div');
-        overlay.className='auth-modal-overlay';
-        overlay.id='aiConfigOverlay';
-        overlay.innerHTML=`
-            <div class="auth-modal ai-config-modal glass-card" style="max-width:600px;">
-                <button class="auth-modal-close" id="btnAIConfigClose">&times;</button>
-                <h2 style="margin-bottom:4px;text-align:center;color:#fff;">🤖 AI 模型配置</h2>
-                <p style="text-align:center;color:var(--text-muted);font-size:0.82em;margin-bottom:16px;">配置大语言模型API · 支持OpenAI兼容接口</p>
-                <div id="aiConfigList" style="max-height:40vh;overflow-y:auto;margin-bottom:12px;">
-                    <div style="text-align:center;padding:20px;color:var(--text-muted);">加载中...</div>
-                </div>
-                <button class="btn-primary btn-block" id="btnAddAIConfig" style="margin-bottom:8px;">+ 添加配置方案</button>
-                <div id="aiConfigForm" style="display:none;background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:8px;">
-                    <div class="auth-input-group"><label class="form-label">配置名称</label><input type="text" class="form-input" id="aiCfgName" placeholder="例如：我的GPT-4"></div>
-                    <div class="auth-input-group"><label class="form-label">API Key</label><input type="password" class="form-input" id="aiCfgKey" placeholder="sk-..."></div>
-                    <div class="auth-input-group"><label class="form-label">API 地址 URL</label><input type="text" class="form-input" id="aiCfgUrl" placeholder="https://api.openai.com/v1"></div>
-                    <div class="auth-input-group"><label class="form-label">模型名称</label><input type="text" class="form-input" id="aiCfgModel" placeholder="gpt-4o"></div>
-                    <input type="hidden" id="aiCfgEditId" value="">
-                    <div style="display:flex;gap:8px;">
-                        <button class="btn-primary" id="btnSaveAIConfig" style="flex:1;">保存</button>
-                        <button class="btn-sm" id="btnCancelAIConfig">取消</button>
-                    </div>
-                    <div class="auth-error" id="aiCfgError" style="display:none;margin-top:8px;"></div>
-                </div>
-                <div class="auth-success" id="aiCfgMsg" style="display:none;"></div>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-
-        overlay.querySelector('#btnAIConfigClose').addEventListener('click',()=>overlay.remove());
-        overlay.addEventListener('click',(e)=>{if(e.target===overlay)overlay.remove();});
-
-        overlay.querySelector('#btnAddAIConfig').addEventListener('click',()=>{
-            document.getElementById('aiConfigForm').style.display='block';
-            document.getElementById('aiCfgEditId').value='';
-            document.getElementById('aiCfgName').value='';
-            document.getElementById('aiCfgKey').value='';
-            document.getElementById('aiCfgUrl').value='';
-            document.getElementById('aiCfgModel').value='';
-            document.getElementById('aiCfgError').style.display='none';
-        });
-
-        overlay.querySelector('#btnCancelAIConfig').addEventListener('click',()=>{
-            document.getElementById('aiConfigForm').style.display='none';
-        });
-
-        overlay.querySelector('#btnSaveAIConfig').addEventListener('click',async()=>{
-            const name=document.getElementById('aiCfgName').value.trim();
-            const key=document.getElementById('aiCfgKey').value.trim();
-            const url=document.getElementById('aiCfgUrl').value.trim();
-            const model=document.getElementById('aiCfgModel').value.trim();
-            const editId=document.getElementById('aiCfgEditId').value;
-            const errorEl=document.getElementById('aiCfgError');
-
-            if(!name||!key||!url||!model){
-                errorEl.textContent='所有字段均为必填';
-                errorEl.style.display='block';
-                return;
-            }
-            errorEl.style.display='none';
-
-            try{
-                if(editId){
-                    await API.updateAIConfig(parseInt(editId),{name,api_key:key,base_url:url,model_name:model});
-                }else{
-                    await API.createAIConfig({name,api_key:key,base_url:url,model_name:model});
-                }
-                document.getElementById('aiConfigForm').style.display='none';
-                this._refreshAIConfigList(overlay);
-                Utils.toast('配置已保存','success');
-            }catch(err){
-                errorEl.textContent=err.message;
-                errorEl.style.display='block';
-            }
-        });
-
-        this._refreshAIConfigList(overlay);
+    /* ========== AI配置页面 ========== */
+    _openAIConfigPage(){
+        this.switchView('ai-config');
+        this._refreshAIConfigPageList();
     },
 
-    async _refreshAIConfigList(overlay){
-        const listEl=overlay.querySelector('#aiConfigList');
+    _bindAIConfigPageEvents(){
+        const btnAdd=document.getElementById('btnAddAIConfigPage');
+        if(btnAdd)btnAdd.addEventListener('click',()=>this._showAIConfigForm(null));
+
+        const btnCancel=document.getElementById('btnCancelAIConfigForm');
+        if(btnCancel)btnCancel.addEventListener('click',()=>{
+            document.getElementById('aiConfigFormPanel').style.display='none';
+        });
+
+        const btnSave=document.getElementById('btnSaveAIConfig');
+        if(btnSave)btnSave.addEventListener('click',()=>this._saveAIConfigForm());
+    },
+
+    _showAIConfigForm(config){
+        const panel=document.getElementById('aiConfigFormPanel');
+        panel.style.display='block';
+        document.getElementById('aiCfgFormError').style.display='none';
+
+        if(config){
+            document.getElementById('aiConfigFormTitle').textContent='编辑配置: '+config.name;
+            document.getElementById('aiCfgEditId').value=config.id;
+            document.getElementById('aiCfgName').value=config.name||'';
+            document.getElementById('aiCfgModel').value=config.model_name||'';
+            document.getElementById('aiCfgUrl').value=config.base_url||'';
+            document.getElementById('aiCfgKey').value='';
+            document.getElementById('aiCfgKey').placeholder='留空则不修改 API Key';
+        }else{
+            document.getElementById('aiConfigFormTitle').textContent='添加新配置';
+            document.getElementById('aiCfgEditId').value='';
+            document.getElementById('aiCfgName').value='';
+            document.getElementById('aiCfgModel').value='';
+            document.getElementById('aiCfgUrl').value='';
+            document.getElementById('aiCfgKey').value='';
+            document.getElementById('aiCfgKey').placeholder='sk-...';
+        }
+        panel.scrollIntoView({behavior:'smooth'});
+    },
+
+    async _saveAIConfigForm(){
+        const name=document.getElementById('aiCfgName').value.trim();
+        const key=document.getElementById('aiCfgKey').value.trim();
+        const url=document.getElementById('aiCfgUrl').value.trim();
+        const model=document.getElementById('aiCfgModel').value.trim();
+        const editId=document.getElementById('aiCfgEditId').value;
+        const errorEl=document.getElementById('aiCfgFormError');
+
+        if(!name||!url||!model){
+            errorEl.textContent='配置名称、API地址、模型名称为必填';
+            errorEl.style.display='block';
+            return;
+        }
+        if(!editId&&!key){
+            errorEl.textContent='API Key 为必填';
+            errorEl.style.display='block';
+            return;
+        }
+        errorEl.style.display='none';
+
+        try{
+            if(editId){
+                const data={name,base_url:url,model_name:model};
+                if(key)data.api_key=key;
+                await API.updateAIConfig(parseInt(editId),data);
+            }else{
+                await API.createAIConfig({name,api_key:key,base_url:url,model_name:model});
+            }
+            document.getElementById('aiConfigFormPanel').style.display='none';
+            this._refreshAIConfigPageList();
+            this._refreshAIStatus();
+            Utils.toast('配置已保存','success');
+        }catch(err){
+            errorEl.textContent=err.message;
+            errorEl.style.display='block';
+        }
+    },
+
+    async _refreshAIConfigPageList(){
+        const listEl=document.getElementById('aiConfigListPage');
         try{
             const result=await API.getAIConfigs();
             const configs=result.configs||[];
             if(configs.length===0){
-                listEl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted);">暂无AI配置方案，点击下方按钮添加</div>';
+                listEl.innerHTML='<div class="empty-state-sm">暂无AI配置方案，点击上方按钮添加</div>';
                 return;
             }
             listEl.innerHTML=configs.map(c=>`
-                <div class="ai-config-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid ${c.is_enabled?'rgba(16,185,129,0.3)':'rgba(255,255,255,0.06)'};">
-                    <div style="flex:1;min-width:0;">
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <strong style="color:#fff;font-size:0.9em;">${Utils.escapeHtml(c.name)}</strong>
-                            ${c.is_enabled?'<span style="color:var(--success);font-size:0.7em;background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:4px;">✓ 使用中</span>':''}
+                <div class="ai-config-card" style="padding:16px;margin-bottom:10px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid ${c.is_enabled?'rgba(16,185,129,0.35)':'rgba(255,255,255,0.08)'};">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+                        <div style="flex:1;min-width:200px;">
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <strong style="font-size:1em;color:#fff;">${Utils.escapeHtml(c.name)}</strong>
+                                ${c.is_enabled?'<span class="ai-badge-active">● 使用中</span>':'<span class="ai-badge-inactive">○ 未启用</span>'}
+                            </div>
+                            <div style="margin-top:8px;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:0.82em;color:var(--text-secondary);">
+                                <span style="color:var(--text-muted);">模型:</span><span>${Utils.escapeHtml(c.model_name)}</span>
+                                <span style="color:var(--text-muted);">地址:</span><span style="word-break:break-all;">${Utils.escapeHtml(c.base_url)}</span>
+                                <span style="color:var(--text-muted);">Key:</span>
+                                <span class="ai-key-display">
+                                    <span class="ai-key-masked" id="keyMasked_${c.id}">${c.api_key_masked||'●●●●●●●●'}</span>
+                                    <span class="ai-key-full" id="keyFull_${c.id}" style="display:none;">${Utils.escapeHtml(c.api_key_full||c.api_key||'')}</span>
+                                    <button class="btn-sm ai-key-toggle" data-cid="${c.id}" style="font-size:0.7em;padding:2px 6px;">👁 显示</button>
+                                </span>
+                            </div>
                         </div>
-                        <div style="color:var(--text-muted);font-size:0.75em;margin-top:2px;">${Utils.escapeHtml(c.model_name)} · ${Utils.escapeHtml(c.base_url)} · Key: ${c.api_key}</div>
-                    </div>
-                    <div style="display:flex;gap:4px;margin-left:8px;flex-shrink:0;">
-                        ${c.is_enabled
-                            ? '<button class="btn-sm" data-ai-action="disable" data-ai-id="'+c.id+'" style="font-size:0.75em;color:var(--warning);">停用</button>'
-                            : '<button class="btn-sm" data-ai-action="enable" data-ai-id="'+c.id+'" style="font-size:0.75em;color:var(--success);">启用</button>'
-                        }
-                        <button class="btn-sm" data-ai-action="test" data-ai-id="${c.id}" style="font-size:0.75em;" title="测试连接">🔌</button>
-                        <button class="btn-sm" data-ai-action="edit" data-ai-id="${c.id}" data-ai-name="${Utils.escapeHtml(c.name)}" data-ai-url="${Utils.escapeHtml(c.base_url)}" data-ai-model="${Utils.escapeHtml(c.model_name)}" style="font-size:0.75em;">✏️</button>
-                        <button class="btn-sm btn-sm-danger" data-ai-action="delete" data-ai-id="${c.id}" style="font-size:0.75em;">🗑</button>
+                        <div style="display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;">
+                            ${c.is_enabled
+                                ? '<button class="btn-sm ai-action-btn" data-ai-act="disable" data-ai-id="'+c.id+'" style="color:var(--warning);">停用</button>'
+                                : '<button class="btn-sm ai-action-btn" data-ai-act="enable" data-ai-id="'+c.id+'" style="color:var(--success);">启用</button>'
+                            }
+                            <button class="btn-sm ai-action-btn" data-ai-act="test" data-ai-id="${c.id}" title="测试连接">🔌 测试</button>
+                            <button class="btn-sm ai-action-btn" data-ai-act="edit" data-ai-id="${c.id}" data-ai-name="${Utils.escapeHtml(c.name)}" data-ai-url="${Utils.escapeHtml(c.base_url)}" data-ai-model="${Utils.escapeHtml(c.model_name)}">✏️ 编辑</button>
+                            <button class="btn-sm ai-action-btn" data-ai-act="delete" data-ai-id="${c.id}" style="color:var(--danger);">🗑 删除</button>
+                        </div>
                     </div>
                 </div>
             `).join('');
 
+            // 绑定API Key显示/隐藏切换
+            listEl.querySelectorAll('.ai-key-toggle').forEach(btn=>{
+                btn.addEventListener('click',()=>{
+                    const cid=btn.dataset.cid;
+                    const masked=document.getElementById('keyMasked_'+cid);
+                    const full=document.getElementById('keyFull_'+cid);
+                    if(masked.style.display!=='none'){
+                        // 显示完整key
+                        masked.style.display='none';
+                        full.style.display='inline';
+                        btn.textContent='🙈 隐藏';
+                        // 如果key内容为空，从服务器获取
+                        if(!full.textContent.trim()||full.textContent==='●●●●●●●●'){
+                            this._fetchAndShowKey(cid,full,btn);
+                        }
+                    }else{
+                        masked.style.display='inline';
+                        full.style.display='none';
+                        btn.textContent='👁 显示';
+                    }
+                });
+            });
+
             // 绑定操作按钮
-            listEl.querySelectorAll('[data-ai-action]').forEach(btn=>{
+            listEl.querySelectorAll('.ai-action-btn').forEach(btn=>{
                 btn.addEventListener('click',async()=>{
                     const id=parseInt(btn.dataset.aiId);
-                    const action=btn.dataset.aiAction;
+                    const act=btn.dataset.aiAct;
                     try{
-                        if(action==='enable'){
+                        if(act==='enable'){
                             btn.disabled=true;btn.textContent='测试中...';
                             try{
                                 const r=await API.enableAIConfig(id);
                                 Utils.toast(r.message+' | 模型: '+r.model,'success');
-                                this._refreshAIConfigList(overlay);
+                                this._refreshAIConfigPageList();
                                 this._refreshAIStatus();
-                            }catch(err){
-                                Utils.toast('启用失败: '+err.message,'error');
-                            }
-                            btn.disabled=false;btn.textContent='启用';
-                        }else if(action==='test'){
+                            }catch(err){Utils.toast('启用失败: '+err.message,'error');}
+                            btn.disabled=false;
+                        }else if(act==='test'){
                             btn.disabled=true;btn.textContent='...';
                             try{
                                 const r=await API.testAIConfig(id);
-                                if(r.success){
-                                    Utils.toast('✅ '+r.message,'success');
-                                    // 显示完整消息
-                                    const msgEl=overlay.querySelector('#aiCfgMsg');
-                                    if(msgEl){msgEl.innerHTML='✅ 连接成功！模型: <strong>'+Utils.escapeHtml(r.model||'')+'</strong>';msgEl.style.display='block';}
-                                }else{
-                                    Utils.toast('❌ '+r.message,'error');
-                                    const msgEl=overlay.querySelector('#aiCfgMsg');
-                                    if(msgEl){msgEl.innerHTML='<span style="color:var(--danger);">❌ '+Utils.escapeHtml(r.message)+'</span>';msgEl.style.display='block';}
-                                }
+                                if(r.success)Utils.toast('✅ '+r.message,'success');
+                                else Utils.toast('❌ '+r.message,'error');
                             }catch(err){Utils.toast('测试失败: '+err.message,'error');}
-                            btn.disabled=false;btn.textContent='🔌';
-                        }else if(action==='disable'){
+                            btn.disabled=false;btn.textContent='🔌 测试';
+                        }else if(act==='disable'){
                             await API.disableAIConfig(id);
-                            Utils.toast('AI配置已停用','success');
-                            this._refreshAIConfigList(overlay);
+                            Utils.toast('已停用','success');
+                            this._refreshAIConfigPageList();
                             this._refreshAIStatus();
-                        }else if(action==='delete'){
+                        }else if(act==='delete'){
                             if(!confirm('确定删除此配置吗？'))return;
                             await API.deleteAIConfig(id);
-                            Utils.toast('配置已删除','success');
-                            this._refreshAIConfigList(overlay);
+                            Utils.toast('已删除','success');
+                            this._refreshAIConfigPageList();
                             this._refreshAIStatus();
-                        }else if(action==='edit'){
-                            document.getElementById('aiConfigForm').style.display='block';
-                            document.getElementById('aiCfgEditId').value=id;
-                            document.getElementById('aiCfgName').value=btn.dataset.aiName||'';
-                            document.getElementById('aiCfgKey').value='';
-                            document.getElementById('aiCfgKey').placeholder='留空则不修改';
-                            document.getElementById('aiCfgUrl').value=btn.dataset.aiUrl||'';
-                            document.getElementById('aiCfgModel').value=btn.dataset.aiModel||'';
-                            document.getElementById('aiCfgError').style.display='none';
+                        }else if(act==='edit'){
+                            const configs=await API.getAIConfigs();
+                            const cfg=(configs.configs||[]).find(c=>c.id===id);
+                            if(cfg)this._showAIConfigForm(cfg);
                         }
-                    }catch(err){
-                        Utils.toast('操作失败: '+err.message,'error');
-                    }
+                    }catch(err){Utils.toast('操作失败: '+err.message,'error');}
                 });
             });
         }catch(err){
             listEl.innerHTML='<div style="text-align:center;padding:20px;color:var(--danger);">加载失败: '+err.message+'</div>';
         }
+    },
+
+    /** 从服务器获取完整API Key */
+    async _fetchAndShowKey(configId,fullEl,btnEl){
+        try{
+            const r=await API.getAIConfigs();
+            const cfg=(r.configs||[]).find(c=>c.id===configId);
+            if(cfg&&cfg.api_key_full){
+                fullEl.textContent=cfg.api_key_full;
+            }
+        }catch(e){/* ignore */}
     },
 
     /* ========== 工具 ========== */
