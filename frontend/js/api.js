@@ -32,11 +32,34 @@ const API = {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', `${this.BASE_URL}/upload`);
+            // 附加认证令牌
+            if (window.Auth && window.Auth.getToken()) {
+                xhr.setRequestHeader('Authorization', `Bearer ${window.Auth.getToken()}`);
+            }
             xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100)); };
             xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText)); else { try { reject(new Error(JSON.parse(xhr.responseText).detail || `上传失败 (${xhr.status})`)); } catch { reject(new Error(`上传失败 (${xhr.status})`)); } } };
             xhr.onerror = () => reject(new Error('网络连接失败'));
             const fd = new FormData(); fd.append('file', file); xhr.send(fd);
         });
+    },
+
+    /* ----- 文件管理 ----- */
+    deleteFile(fileId) { return this.request(`/upload/${fileId}`, { method: 'DELETE' }); },
+    downloadFile(fileId) {
+        // 直接触发下载
+        const token = window.Auth ? window.Auth.getToken() : '';
+        const a = document.createElement('a');
+        a.href = `${this.BASE_URL}/upload/${fileId}/download`;
+        if (token) a.href += `?token=${encodeURIComponent(token)}`;
+        // 使用 fetch 方式下载（需要带 auth header）
+        fetch(`${this.BASE_URL}/upload/${fileId}/download`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        }).then(r => {
+            if (!r.ok) throw new Error('下载失败');
+            return r.blob();
+        }).then(blob => {
+            Utils.downloadFile(URL.createObjectURL(blob), 'data_export.csv');
+        }).catch(e => Utils.toast('下载失败: ' + e.message, 'error'));
     },
 
     /* ----- 全量数据 ----- */
@@ -56,17 +79,26 @@ const API = {
     generateChart(fileId, config) { return this.request('/visualization/generate', { method: 'POST', body: { file_id: fileId, ...config } }); },
 
     /* ----- 导出 ----- */
-    async exportData(fileId) {
-        const r = await this.request('/export/data', { method: 'POST', body: { file_id: fileId } });
+    async exportData(fileId, editedData = null) {
+        const body = { file_id: fileId };
+        if (editedData && editedData.rows) {
+            body.rows = editedData.rows;
+            body.columns = editedData.columns;
+        }
+        const r = await this.request('/export/data', { method: 'POST', body });
         if (r instanceof Response) { const blob = await r.blob(); Utils.downloadFile(URL.createObjectURL(blob), 'data_export.csv'); }
-    },
-    async exportReport(fileId) {
-        const r = await this.request('/export/report', { method: 'POST', body: { file_id: fileId } });
-        if (r instanceof Response) { const blob = await r.blob(); Utils.downloadFile(URL.createObjectURL(blob), 'report.html'); }
     },
 
     /* ----- AI ----- */
     askAI(question, fileId) { return this.request('/ai/query', { method: 'POST', body: { question, file_id: fileId } }); },
+
+    /* ----- AI配置 ----- */
+    getAIConfigs() { return this.request('/ai-config/list'); },
+    createAIConfig(data) { return this.request('/ai-config/create', { method: 'POST', body: data }); },
+    updateAIConfig(id, data) { return this.request(`/ai-config/${id}`, { method: 'PUT', body: data }); },
+    deleteAIConfig(id) { return this.request(`/ai-config/${id}`, { method: 'DELETE' }); },
+    enableAIConfig(id) { return this.request(`/ai-config/${id}/enable`, { method: 'POST' }); },
+    disableAIConfig(id) { return this.request(`/ai-config/${id}/disable`, { method: 'POST' }); },
 
     /* ----- CRUD ----- */
     updateCell(fileId, rowIndex, column, value) { return this.request('/data/cell', { method: 'PUT', body: { file_id: fileId, row_index: rowIndex, column, value } }); },
@@ -90,8 +122,10 @@ const API = {
     authLogin(username, password, remember = false) {
         return this.request('/auth/login', { method: 'POST', body: { username, password, remember } });
     },
-    authRecover(username) {
-        return this.request('/auth/recover', { method: 'POST', body: { username } });
+    authRecover(username, newPassword = null) {
+        const body = { username };
+        if (newPassword) body.new_password = newPassword;
+        return this.request('/auth/recover', { method: 'POST', body });
     },
     authCheck() {
         return this.request('/auth/check');

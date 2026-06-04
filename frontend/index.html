@@ -152,7 +152,6 @@
             <div class="chart-actions">
                 <button class="btn-sm viz-export-btn" id="btnVizExportData">导出数据</button>
                 <button class="btn-sm viz-export-btn" id="btnVizExportChart">导出图表</button>
-                <button class="btn-sm viz-export-btn" id="btnVizExportReport">导出报告</button>
                 <button class="btn-sm viz-clear-btn" id="btnClearChart">清空</button>
             </div>
         </div>
@@ -178,8 +177,8 @@
 <section class="view" id="view-ai-assistant">
     <div class="view-header"><h2>AI 智能助手</h2><p class="view-subtitle">自然语言交互 · 智能洞察 · 图表推荐</p></div>
     <div class="ai-layout glass-card">
-        <div class="ai-chat-area" id="aiChatArea"><div class="ai-msg bot"><div class="ai-avatar">AI</div><div class="ai-bubble"><p>你好！我是数据分析助手，可以帮你：</p><ul><li>数据概览与统计摘要</li><li>自动发现数据洞察</li><li>推荐合适的可视化图表</li><li>回答数据相关问题</li></ul></div></div></div>
-        <div class="ai-input-row"><input type="text" class="form-input" id="aiInput" placeholder="输入你的问题"><button class="btn-primary" id="btnAISend">发送</button></div>
+        <div class="ai-chat-area" id="aiChatArea"><div class="ai-msg bot"><div class="ai-avatar">AI</div><div class="ai-bubble"><p>你好！我是数据分析助手，可以帮你：</p><ul><li>数据概览与统计摘要</li><li>自动发现数据洞察</li><li>推荐合适的可视化图表</li><li>回答数据相关问题</li></ul><p style="margin-top:8px;font-size:0.85em;color:var(--text-muted);">💡 点击下方 <strong>⚙️ 配置</strong> 按钮可接入你自己的大语言模型API</p></div></div></div>
+        <div class="ai-input-row"><input type="text" class="form-input" id="aiInput" placeholder="输入你的问题"><button class="btn-primary" id="btnAISend">发送</button><button class="btn-sm" id="btnAIConfig" title="AI模型配置" style="margin-left:6px;">⚙️ 配置</button></div>
     </div>
 </section>
 

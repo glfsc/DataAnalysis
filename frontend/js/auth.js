@@ -88,8 +88,8 @@ const Auth = {
         return result;
     },
 
-    async recoverPassword(username) {
-        return await API.authRecover(username);
+    async recoverPassword(username, newPassword = null) {
+        return await API.authRecover(username, newPassword);
     },
 
     /* ========== 退出登录 ========== */
@@ -116,15 +116,12 @@ const Auth = {
         if (appWrapper) {
             appWrapper.style.display = 'none';
         }
-        // 重置 App 状态
+        // 重置当前视图状态但保留文件列表（下次登录后从服务器加载）
         if (typeof App !== 'undefined' && App.state) {
-            App.state.files = {};
-            App.state.fileOrder = [];
             App.state.selectedIds = [];
             App.state.currentFileId = null;
             App.state.currentChart = null;
             App.state.editedData = null;
-            App._refreshDashboard();
         }
     },
 
@@ -330,11 +327,13 @@ const Auth = {
                     <button class="btn-primary btn-block" id="btnRegister">注 册</button>
                 </div>
                 <div class="auth-panel" id="authPanelRecover" style="display:${tab==='recover'?'block':'none'};">
-                    <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:14px;">输入用户名，系统将为您重置密码</p>
+                    <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:14px;">输入用户名并设置新密码</p>
                     <div class="auth-input-group"><label class="form-label">用户名</label><input type="text" class="form-input" id="recoverUsername" placeholder="请输入用户名"></div>
+                    <div class="auth-input-group"><label class="form-label">新密码（至少6位）</label><input type="password" class="form-input" id="recoverNewPassword" placeholder="输入自定义新密码" autocomplete="new-password"></div>
+                    <div class="auth-input-group"><label class="form-label">确认新密码</label><input type="password" class="form-input" id="recoverNewPasswordConfirm" placeholder="再次输入新密码" autocomplete="new-password"></div>
                     <div class="auth-error" id="recoverError" style="display:none;"></div>
                     <div class="auth-success" id="recoverSuccess" style="display:none;"></div>
-                    <button class="btn-primary btn-block" id="btnRecover">找回密码</button>
+                    <button class="btn-primary btn-block" id="btnRecover">重置密码</button>
                 </div>
             </div>
         `;
@@ -412,19 +411,24 @@ const Auth = {
 
     async _handleRecover(overlay) {
         const username = overlay.querySelector('#recoverUsername').value.trim();
+        const newPassword = overlay.querySelector('#recoverNewPassword').value;
+        const newPasswordConfirm = overlay.querySelector('#recoverNewPasswordConfirm').value;
         if (!username) { this._showError(overlay, 'authPanelRecover', 'recoverError', '请输入用户名'); return; }
+        if (!newPassword) { this._showError(overlay, 'authPanelRecover', 'recoverError', '请设置新密码'); return; }
+        if (newPassword.length < 6) { this._showError(overlay, 'authPanelRecover', 'recoverError', '新密码长度至少6位'); return; }
+        if (newPassword !== newPasswordConfirm) { this._showError(overlay, 'authPanelRecover', 'recoverError', '两次输入的密码不一致'); return; }
         const btn = overlay.querySelector('#btnRecover'); btn.disabled = true; btn.textContent = '处理中...';
         try {
-            const result = await this.recoverPassword(username);
+            const result = await this.recoverPassword(username, newPassword);
             const se = overlay.querySelector('#recoverSuccess');
             const ee = overlay.querySelector('#recoverError');
             if (ee) ee.style.display = 'none';
             if (se) {
-                se.innerHTML = `<strong>密码已重置</strong><br>新密码：<code style="background:rgba(99,102,241,0.2);padding:2px 8px;border-radius:4px;font-size:1.1em;">${result.new_password}</code><br><span style="font-size:0.85em;color:var(--text-muted);">请妥善保管，登录后可修改密码</span>`;
+                se.innerHTML = `<strong>密码已重置</strong><br>用户名：<code>${result.username}</code><br><span style="font-size:0.85em;color:var(--text-muted);">请使用新密码登录</span>`;
                 se.style.display = 'block';
             }
         } catch (err) { this._showError(overlay, 'authPanelRecover', 'recoverError', err.message); }
-        finally { btn.disabled = false; btn.textContent = '找回密码'; }
+        finally { btn.disabled = false; btn.textContent = '重置密码'; }
     },
 
     /* ========== 用户设置弹窗 ========== */

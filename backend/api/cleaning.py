@@ -57,7 +57,7 @@ async def clean_data(request: CleanRequest, db: Session = Depends(get_db)):
         original_missing = int(df.isnull().sum().sum())
         original_duplicates = int(df.duplicated().sum())
 
-        df_cleaned, summary = CleaningService.clean_data(df, params)
+        df_cleaned, summary, deleted_rows_info = CleaningService.clean_data(df, params)
 
         cleaned_file_id = f"{request.file_id}_cleaned"
         cleaned_path = DataService.save_dataframe(df_cleaned, cleaned_file_id, cleaned=True)
@@ -86,6 +86,7 @@ async def clean_data(request: CleanRequest, db: Session = Depends(get_db)):
             "cleaned_missing": cleaned_missing,
             "cleaned_duplicates": cleaned_duplicates,
             "summary": summary.dict(),
+            "deleted_rows": deleted_rows_info,
         }
 
     except Exception as e:

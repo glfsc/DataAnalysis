@@ -99,10 +99,11 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
 async def recover(req: RecoverRequest, db: Session = Depends(get_db)):
     """
     通过用户名找回密码
-    - 返回重置后的新密码
+    - 可选提供 new_password 自定义新密码
+    - 不提供则随机生成密码
     """
     try:
-        result = recover_password(db, req.username)
+        result = recover_password(db, req.username, req.new_password)
         return {
             "message": "密码已重置",
             "username": result["username"],

@@ -45,6 +45,35 @@ const App = {
         // 刷新顶栏头像
         if (typeof Auth !== 'undefined') Auth._renderTopbarAvatar();
         setTimeout(()=>{if(typeof Particles!=='undefined')Particles.init();},300);
+        // 从服务器加载已有文件
+        this._loadFilesFromServer();
+    },
+    /** 从服务器加载当前用户的文件列表 */
+    async _loadFilesFromServer(){
+        try{
+            const result = await API.getUploadList();
+            if (result.files && result.files.length > 0) {
+                for (const f of result.files) {
+                    if (!this.state.files[f.file_id]) {
+                        this.state.files[f.file_id] = {
+                            fileName: f.filename,
+                            fileSize: f.file_size,
+                            uploadTime: f.upload_time,
+                            columns: [],
+                            numericColumns: [],
+                            rowCount: f.rows || 0,
+                            colCount: f.columns || 0,
+                            missingCount: 0,
+                            cleanedFileId: f.is_cleaned ? f.file_id + '_cleaned' : null,
+                            previewData: [],
+                            progress: { upload: true, cleaning: f.is_cleaned || false, analysis: false, visualization: false, export: false },
+                        };
+                        if (!this.state.fileOrder.includes(f.file_id)) this.state.fileOrder.unshift(f.file_id);
+                    }
+                }
+                this._refreshDashboard();
+            }
+        } catch(e) { console.warn('加载文件列表失败:', e); }
     },
 
     /* ========== 文件管理 ========== */
@@ -64,9 +93,29 @@ const App = {
     _renderRecentList(){
         const list=document.getElementById('recentList');
         if(this.state.fileOrder.length===0){list.innerHTML='<div class="empty-state-sm">暂无项目，点击"上传数据"开始分析</div>';return;}
-        list.innerHTML=this.state.fileOrder.map(fid=>{const f=this.state.files[fid];if(!f)return'';const sel=this.state.selectedIds.includes(fid);const t=new Date(f.uploadTime);const ts=(t.getMonth()+1)+'/'+t.getDate()+' '+t.getHours()+':'+String(t.getMinutes()).padStart(2,'0');const p=f.progress;return '<div class="recent-item '+(sel?'selected':'')+'" data-fid="'+fid+'"><input type="checkbox" class="recent-checkbox" '+(sel?'checked':'')+' data-fid="'+fid+'"><div class="recent-info"><span class="recent-name">'+Utils.escapeHtml(f.fileName)+'</span><div class="recent-meta"><span>'+Utils.formatFileSize(f.fileSize)+'</span><span>'+f.rowCount+'行 x '+f.colCount+'列</span><span>'+ts+'</span></div></div><div class="recent-progress"><span class="progress-step-dot '+(p.upload?'done':'active')+'" title="上传"></span><span class="progress-step-dot '+(p.cleaning?'done':'')+'" title="清洗"></span><span class="progress-step-dot '+(p.analysis?'done':'')+'" title="分析"></span><span class="progress-step-dot '+(p.visualization?'done':'')+'" title="可视化"></span><span class="progress-step-dot '+(p.export?'done':'')+'" title="导出"></span><span class="progress-label">'+this._progressText(p)+'</span></div></div>';}).join('');
-        list.querySelectorAll('.recent-item').forEach(item=>{item.addEventListener('click',e=>{if(e.target.tagName==='INPUT')return;const cb=item.querySelector('.recent-checkbox');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));});item.addEventListener('dblclick',e=>{e.preventDefault();this._showFullDataPreview(item.dataset.fid);});});
+        list.innerHTML=this.state.fileOrder.map(fid=>{const f=this.state.files[fid];if(!f)return'';const sel=this.state.selectedIds.includes(fid);const t=new Date(f.uploadTime);const ts=(t.getMonth()+1)+'/'+t.getDate()+' '+t.getHours()+':'+String(t.getMinutes()).padStart(2,'0');const p=f.progress;return '<div class="recent-item '+(sel?'selected':'')+'" data-fid="'+fid+'"><input type="checkbox" class="recent-checkbox" '+(sel?'checked':'')+' data-fid="'+fid+'"><div class="recent-info"><span class="recent-name">'+Utils.escapeHtml(f.fileName)+'</span><div class="recent-meta"><span>'+Utils.formatFileSize(f.fileSize)+'</span><span>'+f.rowCount+'行 x '+f.colCount+'列</span><span>'+ts+'</span></div></div><div class="recent-progress"><span class="progress-step-dot '+(p.upload?'done':'active')+'" title="上传"></span><span class="progress-step-dot '+(p.cleaning?'done':'')+'" title="清洗"></span><span class="progress-step-dot '+(p.analysis?'done':'')+'" title="分析"></span><span class="progress-step-dot '+(p.visualization?'done':'')+'" title="可视化"></span><span class="progress-step-dot '+(p.export?'done':'')+'" title="导出"></span><span class="progress-label">'+this._progressText(p)+'</span></div><div class="recent-actions-col"><button class="btn-sm-icon" title="下载" data-action="download" data-fid="'+fid+'">⬇</button><button class="btn-sm-icon btn-sm-icon-danger" title="删除" data-action="delete" data-fid="'+fid+'">🗑</button></div></div>';}).join('');
+        list.querySelectorAll('.recent-item').forEach(item=>{item.addEventListener('click',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='BUTTON')return;const cb=item.querySelector('.recent-checkbox');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));});item.addEventListener('dblclick',e=>{e.preventDefault();this._showFullDataPreview(item.dataset.fid);});});
         list.querySelectorAll('.recent-checkbox').forEach(cb=>{cb.addEventListener('change',e=>{e.stopPropagation();const fid=cb.dataset.fid;if(cb.checked){if(!this.state.selectedIds.includes(fid))this.state.selectedIds.push(fid);}else{this.state.selectedIds=this.state.selectedIds.filter(id=>id!==fid);}this._updateSelection();});});
+        // 下载 & 删除按钮
+        list.querySelectorAll('[data-action="download"]').forEach(btn=>{
+            btn.addEventListener('click',e=>{e.stopPropagation();API.downloadFile(btn.dataset.fid);});
+        });
+        list.querySelectorAll('[data-action="delete"]').forEach(btn=>{
+            btn.addEventListener('click',e=>{
+                e.stopPropagation();
+                const fid=btn.dataset.fid;
+                this._showConfirm('确定删除文件 "'+(this.state.files[fid]?.fileName||fid)+'" 吗？此操作不可撤销。',async()=>{
+                    try{
+                        await API.deleteFile(fid);
+                        delete this.state.files[fid];
+                        this.state.fileOrder=this.state.fileOrder.filter(id=>id!==fid);
+                        this.state.selectedIds=this.state.selectedIds.filter(id=>id!==fid);
+                        Utils.toast('文件已删除','success');
+                        this._refreshDashboard();
+                    }catch(err){Utils.toast('删除失败: '+err.message,'error');}
+                });
+            });
+        });
     },
     _progressText(p){if(p.export)return'已完成';if(p.visualization)return'已可视化';if(p.analysis)return'已分析';if(p.cleaning)return'已清洗';if(p.upload)return'已上传';return'';},
     _updateSelection(){document.querySelectorAll('.recent-item').forEach(item=>{const fid=item.dataset.fid;item.classList.toggle('selected',this.state.selectedIds.includes(fid));const cb=item.querySelector('.recent-checkbox');if(cb)cb.checked=this.state.selectedIds.includes(fid);});this._updateQuickBtns();this._updateFileIndicators();if(this.state.selectedIds.length===1)this.state.currentFileId=this.state.selectedIds[0];},
@@ -145,19 +194,38 @@ const App = {
         try{const r=await API.getAllData(cfid);if(r.data&&r.data.length>0){const cols=r.columns;document.getElementById('cleanedDataTable').innerHTML='<thead><tr><th>#</th>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>'+r.data.map((row,i)=>'<tr><td style="color:var(--text-muted);font-size:0.8em">'+(i+1)+'</td>'+cols.map(c=>'<td>'+(row[c]!==null&&row[c]!==undefined?String(row[c]).slice(0,60):'')+'</td>').join('')+'</tr>').join('')+'</tbody>';document.getElementById('cleanedDataSection').style.display='block';}}catch(e){console.warn('Load cleaned data failed:',e);}
     },
     async _showDeletedRows(fid,cleanResult){
-        // 获取原始数据，通过比较行数差异显示被删除的行
+        // 显示清洗API返回的删除行详情
         try{
-            const origData=await API.getAllData(fid);
-            const cleanedData=await API.getAllData(cleanResult.cleaned_file_id);
-            const origRows=origData.data||[];const cleanedRows=cleanedData.data||[];
-            // 找出被删除的行（原始中有但清洗后没有的）
-            const removed=[];let dupRemoved=cleanResult.original_duplicates||0;let missingRemoved=(cleanResult.original_missing||0)-(cleanResult.cleaned_missing||0);
-            if(dupRemoved>0||missingRemoved>0||(origRows.length-cleanedRows.length)>0){
-                const deletedCount=origRows.length-cleanedRows.length;
-                const cols=origData.columns||[];
-                document.getElementById('cleanDeletedTable').innerHTML='<thead><tr><th>#</th>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody><tr><td colspan="'+(cols.length+1)+'" style="padding:20px;color:var(--text-muted);text-align:center;">共计删除 <strong style="color:var(--danger)">'+deletedCount+'</strong> 行（重复行: '+dupRemoved+'，含缺失值行: '+missingRemoved+'）</td></tr></tbody>';
-                document.getElementById('cleanDeletedSection').style.display='block';
+            const deletedInfo=cleanResult.deleted_rows;
+            if(!deletedInfo){return;}
+            const missingRows=deletedInfo.missing_rows||[];
+            const dupRows=deletedInfo.duplicate_rows||[];
+            if(missingRows.length===0&&dupRows.length===0){
+                document.getElementById('cleanDeletedSection').style.display='none';
+                return;
             }
+
+            // 获取列名
+            const origData=await API.getAllData(fid);
+            const cols=origData.columns||[];
+
+            let tableHtml='<thead><tr><th>#</th><th>原始行号</th><th>删除原因</th>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>';
+
+            let rowNum=0;
+            // 缺失值行
+            for(const row of missingRows){
+                rowNum++;
+                tableHtml+='<tr style="background:rgba(239,68,68,0.08);"><td>'+rowNum+'</td><td style="color:var(--danger);">'+(row.original_index!==undefined?row.original_index+1:'--')+'</td><td><span class="deleted-reason-tag reason-missing">缺失值</span></td>'+cols.map(c=>'<td>'+(row.data&&row.data[c]!==undefined?(row.data[c]===null?'<em style="color:var(--danger);">NULL</em>':String(row.data[c]).slice(0,60)):'')+'</td>').join('')+'</tr>';
+            }
+            // 重复行
+            for(const row of dupRows){
+                rowNum++;
+                tableHtml+='<tr style="background:rgba(245,158,11,0.06);"><td>'+rowNum+'</td><td style="color:var(--warning);">'+(row.original_index!==undefined?row.original_index+1:'--')+'</td><td><span class="deleted-reason-tag reason-duplicate">重复行</span></td>'+cols.map(c=>'<td>'+(row.data&&row.data[c]!==undefined?String(row.data[c]).slice(0,60):'')+'</td>').join('')+'</tr>';
+            }
+            tableHtml+='</tbody>';
+
+            document.getElementById('cleanDeletedTable').innerHTML=tableHtml;
+            document.getElementById('cleanDeletedSection').style.display='block';
         }catch(e){console.warn('Show deleted rows failed:',e);}
     },
 
@@ -775,7 +843,6 @@ const App = {
         document.getElementById('btnClearChart').addEventListener('click',()=>this._clearChart());
         document.getElementById('btnVizExportChart').addEventListener('click',()=>this._exportChartPNG());
         document.getElementById('btnVizExportData').addEventListener('click',()=>this._handleExport('data'));
-        document.getElementById('btnVizExportReport').addEventListener('click',()=>this._handleExport('report'));
         document.getElementById('showDataLabels').addEventListener('change',function(){Charts.toggleDataLabels(this.checked);});
         document.getElementById('btnAddRow').addEventListener('click',()=>this._vizAddRow());
         document.getElementById('btnSaveChanges').addEventListener('click',()=>this._vizSaveChanges());
@@ -1063,18 +1130,41 @@ const App = {
         if(fc){const opt=document.createElement('option');opt.value=name;opt.textContent=name;fc.appendChild(opt);}
     },
     _renameCol(oldName){
-        const n=prompt('重命名列 "'+oldName+'":',oldName);
-        if(!n||n===oldName)return;
         if(!this.state.editedData)return;
-        const idx=this.state.editedData.columns.indexOf(oldName);
-        if(idx>=0)this.state.editedData.columns[idx]=n;
-        this.state.editedData.renamedCols[oldName]=n;
-        this.state.editedData.rows.forEach(row=>{if(row[oldName]!==undefined){row[n]=row[oldName];delete row[oldName];}});
-        this.state.editedData.newRows.forEach(row=>{if(row[oldName]!==undefined){row[n]=row[oldName];delete row[oldName];}});
-        this._renderVizTable();
-        // 更新筛选列下拉
-        const fc=document.getElementById('tableFilterCol');
-        if(fc){const opt=fc.querySelector('option[value="'+oldName+'"]');if(opt)opt.value=n;opt.textContent=n;}
+        // 找到列头 th 元素并转为 inline 编辑
+        const th=document.querySelector('#vizDataTable th[data-col]');
+        // 遍历找到匹配的th（避免CSS.escape兼容性问题）
+        let targetTh=null;
+        document.querySelectorAll('#vizDataTable th[data-col]').forEach(el=>{
+            if(el.dataset.col===oldName)targetTh=el;
+        });
+        if(!targetTh||targetTh.querySelector('input'))return;
+        const oldText=targetTh.textContent;
+        targetTh.classList.add('editing');
+        targetTh.innerHTML='<input value="'+Utils.escapeHtml(oldName)+'" style="width:100%;min-width:80px;">';
+        const inp=targetTh.querySelector('input');inp.focus();inp.select();
+        const save=()=>{
+            const n=inp.value.trim();targetTh.classList.remove('editing');
+            if(!n||n===oldName){targetTh.textContent=oldText;return;}
+            const d=this.state.editedData;
+            const idx=d.columns.indexOf(oldName);
+            if(idx>=0)d.columns[idx]=n;
+            d.renamedCols[oldName]=n;
+            d.rows.forEach(row=>{if(row[oldName]!==undefined){row[n]=row[oldName];delete row[oldName];}});
+            d.newRows.forEach(row=>{if(row[oldName]!==undefined){row[n]=row[oldName];delete row[oldName];}});
+            // 更新删除列列表中的列名
+            const delIdx=d.deletedCols.indexOf(oldName);
+            if(delIdx>=0)d.deletedCols[delIdx]=n;
+            this._renderVizTable();
+            // 更新筛选列下拉
+            const fc=document.getElementById('tableFilterCol');
+            if(fc){const opts=fc.querySelectorAll('option');opts.forEach(opt=>{if(opt.value===oldName){opt.value=n;opt.textContent=n;}});}
+        };
+        inp.addEventListener('blur',save);
+        inp.addEventListener('keydown',e=>{
+            if(e.key==='Enter')inp.blur();
+            if(e.key==='Escape'){targetTh.textContent=oldText;targetTh.classList.remove('editing');}
+        });
     },
     async _vizSaveChanges(){
         if(!this.state.editedData)return;const d=this.state.editedData;this._showLoading('保存修改...');
@@ -1104,12 +1194,181 @@ const App = {
 
     /* ========== 导出 ========== */
     _bindExportEvents(){},
-    async _handleExport(type){const aid=this._getActiveFileId();if(!aid){Utils.toast('请先选择文件','warning');return;}const useId=this.state.files[aid]?.cleanedFileId||aid;this._showLoading('导出中...');try{switch(type){case'data':await API.exportData(useId);break;case'report':await API.exportReport(useId);break;}this._markProgress(aid,'export');this._refreshDashboard();Utils.toast('导出成功','success');}catch(err){Utils.toast('导出失败: '+err.message,'error');}finally{this._hideLoading();}},
+    async _handleExport(type){const aid=this._getActiveFileId();if(!aid){Utils.toast('请先选择文件','warning');return;}const useId=this.state.files[aid]?.cleanedFileId||aid;this._showLoading('导出中...');try{switch(type){case'data':
+        // 如果在可视化视图且有编辑数据，导出编辑后的数据
+        if(this.state.editedData&&this.state.currentView==='visualization'){
+            const d=this.state.editedData;
+            const cols=d.columns.filter(c=>!d.deletedCols.includes(c));
+            const allRows=[...d.newRows,...d.rows.filter((_,i)=>!d.deletedRows.includes(i))];
+            await API.exportData(useId,{rows:allRows,columns:cols});
+        }else{
+            await API.exportData(useId);
+        }
+        break;}this._markProgress(aid,'export');this._refreshDashboard();Utils.toast('导出成功','success');}catch(err){Utils.toast('导出失败: '+err.message,'error');}finally{this._hideLoading();}},
 
     /* ========== AI ========== */
-    _bindAIEvents(){document.getElementById('btnAISend').addEventListener('click',()=>this._sendAIMessage());document.getElementById('aiInput').addEventListener('keydown',e=>{if(e.key==='Enter')this._sendAIMessage();});},
+    _bindAIEvents(){
+        document.getElementById('btnAISend').addEventListener('click',()=>this._sendAIMessage());
+        document.getElementById('aiInput').addEventListener('keydown',e=>{if(e.key==='Enter')this._sendAIMessage();});
+        const btnAIConfig=document.getElementById('btnAIConfig');
+        if(btnAIConfig)btnAIConfig.addEventListener('click',()=>this._showAIConfigModal());
+    },
     async _sendAIMessage(){const inp=document.getElementById('aiInput');const msg=inp.value.trim();if(!msg)return;this._addAIMessage('user',msg);inp.value='';const aid=this._getActiveFileId();const useId=aid?(this.state.files[aid]?.cleanedFileId||aid):null;try{const r=await API.askAI(msg,useId);if(r.reply)this._addAIMessage('bot',r.reply);if(r.chart_data){this.state.currentChart=r.chart_data;this.switchView('visualization');setTimeout(()=>{document.getElementById('chartStage').innerHTML='';Charts.renderChart('chartStage',r.chart_data);},400);}}catch(err){this._addAIMessage('bot','抱歉: '+err.message);}},
     _addAIMessage(role,text){const area=document.getElementById('aiChatArea');const div=document.createElement('div');div.className='ai-msg '+role;div.innerHTML='<div class="ai-avatar">'+(role==='user'?'You':'AI')+'</div><div class="ai-bubble"><p>'+text.replace(/\n/g,'<br>')+'</p></div>';area.appendChild(div);area.scrollTop=area.scrollHeight;},
+
+    /* ========== AI配置弹窗 ========== */
+    _showAIConfigModal(){
+        // 移除旧弹窗
+        const old=document.getElementById('aiConfigOverlay');
+        if(old)old.remove();
+
+        const overlay=document.createElement('div');
+        overlay.className='auth-modal-overlay';
+        overlay.id='aiConfigOverlay';
+        overlay.innerHTML=`
+            <div class="auth-modal ai-config-modal glass-card" style="max-width:600px;">
+                <button class="auth-modal-close" id="btnAIConfigClose">&times;</button>
+                <h2 style="margin-bottom:4px;text-align:center;color:#fff;">🤖 AI 模型配置</h2>
+                <p style="text-align:center;color:var(--text-muted);font-size:0.82em;margin-bottom:16px;">配置大语言模型API · 支持OpenAI兼容接口</p>
+                <div id="aiConfigList" style="max-height:40vh;overflow-y:auto;margin-bottom:12px;">
+                    <div style="text-align:center;padding:20px;color:var(--text-muted);">加载中...</div>
+                </div>
+                <button class="btn-primary btn-block" id="btnAddAIConfig" style="margin-bottom:8px;">+ 添加配置方案</button>
+                <div id="aiConfigForm" style="display:none;background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:8px;">
+                    <div class="auth-input-group"><label class="form-label">配置名称</label><input type="text" class="form-input" id="aiCfgName" placeholder="例如：我的GPT-4"></div>
+                    <div class="auth-input-group"><label class="form-label">API Key</label><input type="password" class="form-input" id="aiCfgKey" placeholder="sk-..."></div>
+                    <div class="auth-input-group"><label class="form-label">API 地址 URL</label><input type="text" class="form-input" id="aiCfgUrl" placeholder="https://api.openai.com/v1"></div>
+                    <div class="auth-input-group"><label class="form-label">模型名称</label><input type="text" class="form-input" id="aiCfgModel" placeholder="gpt-4o"></div>
+                    <input type="hidden" id="aiCfgEditId" value="">
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-primary" id="btnSaveAIConfig" style="flex:1;">保存</button>
+                        <button class="btn-sm" id="btnCancelAIConfig">取消</button>
+                    </div>
+                    <div class="auth-error" id="aiCfgError" style="display:none;margin-top:8px;"></div>
+                </div>
+                <div class="auth-success" id="aiCfgMsg" style="display:none;"></div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        overlay.querySelector('#btnAIConfigClose').addEventListener('click',()=>overlay.remove());
+        overlay.addEventListener('click',(e)=>{if(e.target===overlay)overlay.remove();});
+
+        overlay.querySelector('#btnAddAIConfig').addEventListener('click',()=>{
+            document.getElementById('aiConfigForm').style.display='block';
+            document.getElementById('aiCfgEditId').value='';
+            document.getElementById('aiCfgName').value='';
+            document.getElementById('aiCfgKey').value='';
+            document.getElementById('aiCfgUrl').value='';
+            document.getElementById('aiCfgModel').value='';
+            document.getElementById('aiCfgError').style.display='none';
+        });
+
+        overlay.querySelector('#btnCancelAIConfig').addEventListener('click',()=>{
+            document.getElementById('aiConfigForm').style.display='none';
+        });
+
+        overlay.querySelector('#btnSaveAIConfig').addEventListener('click',async()=>{
+            const name=document.getElementById('aiCfgName').value.trim();
+            const key=document.getElementById('aiCfgKey').value.trim();
+            const url=document.getElementById('aiCfgUrl').value.trim();
+            const model=document.getElementById('aiCfgModel').value.trim();
+            const editId=document.getElementById('aiCfgEditId').value;
+            const errorEl=document.getElementById('aiCfgError');
+
+            if(!name||!key||!url||!model){
+                errorEl.textContent='所有字段均为必填';
+                errorEl.style.display='block';
+                return;
+            }
+            errorEl.style.display='none';
+
+            try{
+                if(editId){
+                    await API.updateAIConfig(parseInt(editId),{name,api_key:key,base_url:url,model_name:model});
+                }else{
+                    await API.createAIConfig({name,api_key:key,base_url:url,model_name:model});
+                }
+                document.getElementById('aiConfigForm').style.display='none';
+                this._refreshAIConfigList(overlay);
+                Utils.toast('配置已保存','success');
+            }catch(err){
+                errorEl.textContent=err.message;
+                errorEl.style.display='block';
+            }
+        });
+
+        this._refreshAIConfigList(overlay);
+    },
+
+    async _refreshAIConfigList(overlay){
+        const listEl=overlay.querySelector('#aiConfigList');
+        try{
+            const result=await API.getAIConfigs();
+            const configs=result.configs||[];
+            if(configs.length===0){
+                listEl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted);">暂无AI配置方案，点击下方按钮添加</div>';
+                return;
+            }
+            listEl.innerHTML=configs.map(c=>`
+                <div class="ai-config-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid ${c.is_enabled?'rgba(16,185,129,0.3)':'rgba(255,255,255,0.06)'};">
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <strong style="color:#fff;font-size:0.9em;">${Utils.escapeHtml(c.name)}</strong>
+                            ${c.is_enabled?'<span style="color:var(--success);font-size:0.7em;background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:4px;">✓ 使用中</span>':''}
+                        </div>
+                        <div style="color:var(--text-muted);font-size:0.75em;margin-top:2px;">${Utils.escapeHtml(c.model_name)} · ${Utils.escapeHtml(c.base_url)} · Key: ${c.api_key}</div>
+                    </div>
+                    <div style="display:flex;gap:4px;margin-left:8px;flex-shrink:0;">
+                        ${c.is_enabled
+                            ? '<button class="btn-sm" data-ai-action="disable" data-ai-id="'+c.id+'" style="font-size:0.75em;color:var(--warning);">停用</button>'
+                            : '<button class="btn-sm" data-ai-action="enable" data-ai-id="'+c.id+'" style="font-size:0.75em;color:var(--success);">启用</button>'
+                        }
+                        <button class="btn-sm" data-ai-action="edit" data-ai-id="${c.id}" data-ai-name="${Utils.escapeHtml(c.name)}" data-ai-url="${Utils.escapeHtml(c.base_url)}" data-ai-model="${Utils.escapeHtml(c.model_name)}" style="font-size:0.75em;">✏️</button>
+                        <button class="btn-sm btn-sm-danger" data-ai-action="delete" data-ai-id="${c.id}" style="font-size:0.75em;">🗑</button>
+                    </div>
+                </div>
+            `).join('');
+
+            // 绑定操作按钮
+            listEl.querySelectorAll('[data-ai-action]').forEach(btn=>{
+                btn.addEventListener('click',async()=>{
+                    const id=parseInt(btn.dataset.aiId);
+                    const action=btn.dataset.aiAction;
+                    try{
+                        if(action==='enable'){
+                            await API.enableAIConfig(id);
+                            Utils.toast('AI配置已启用','success');
+                            this._refreshAIConfigList(overlay);
+                        }else if(action==='disable'){
+                            await API.disableAIConfig(id);
+                            Utils.toast('AI配置已停用','success');
+                            this._refreshAIConfigList(overlay);
+                        }else if(action==='delete'){
+                            if(!confirm('确定删除此配置吗？'))return;
+                            await API.deleteAIConfig(id);
+                            Utils.toast('配置已删除','success');
+                            this._refreshAIConfigList(overlay);
+                        }else if(action==='edit'){
+                            document.getElementById('aiConfigForm').style.display='block';
+                            document.getElementById('aiCfgEditId').value=id;
+                            document.getElementById('aiCfgName').value=btn.dataset.aiName||'';
+                            // Key 不回填（需要重新输入）
+                            document.getElementById('aiCfgKey').value='';
+                            document.getElementById('aiCfgKey').placeholder='留空则不修改';
+                            document.getElementById('aiCfgUrl').value=btn.dataset.aiUrl||'';
+                            document.getElementById('aiCfgModel').value=btn.dataset.aiModel||'';
+                            document.getElementById('aiCfgError').style.display='none';
+                        }
+                    }catch(err){
+                        Utils.toast('操作失败: '+err.message,'error');
+                    }
+                });
+            });
+        }catch(err){
+            listEl.innerHTML='<div style="text-align:center;padding:20px;color:var(--danger);">加载失败: '+err.message+'</div>';
+        }
+    },
 
     /* ========== 工具 ========== */
     _showConfirm(msg,onOk){

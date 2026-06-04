@@ -2,11 +2,13 @@
 数据上传API路由
 """
 import math
+import os
 import uuid
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -41,6 +43,18 @@ def _sanitize(obj):
     return obj
 
 
+def _get_current_user_id(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Optional[int]:
+    """从认证头获取当前用户ID（可选认证）"""
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "").strip()
+    if not token:
+        return None
+    from services.auth_service import get_current_user
+    user = get_current_user(db, token)
+    return user.id if user else None
+
+
 # 辅助：从数据库加载 DataFrame
 def _load_df(file_id: str, db: Session):
     df = DataService.get_dataframe(file_id)
@@ -59,6 +73,7 @@ def _load_df(file_id: str, db: Session):
 async def upload_file(
     file: UploadFile = File(..., description="CSV或Excel文件（最大10MB）"),
     db: Session = Depends(get_db),
+    user_id: Optional[int] = Depends(_get_current_user_id),
 ):
     """上传CSV或Excel文件进行数据分析"""
     try:
@@ -76,7 +91,7 @@ async def upload_file(
         preview = DataService.get_preview(df)
         info_data = DataService.get_info(df)
 
-        # 保存到数据库
+        # 保存到数据库（关联用户）
         db_record = UploadedFile(
             file_id=file_id,
             filename=file.filename,
@@ -86,10 +101,11 @@ async def upload_file(
             rows=info_data["rows"],
             columns=info_data["columns"],
             column_info=info_data["column_types"],
+            user_id=user_id,
         )
         db.add(db_record)
 
-        logger.info(f"文件上传成功: {file.filename} (ID: {file_id})")
+        logger.info(f"文件上传成功: {file.filename} (ID: {file_id}, user: {user_id})")
 
         return _sanitize({
             "file_id": file_id,
@@ -114,9 +130,15 @@ async def upload_file(
 
 
 @router.get("/upload/list", summary="获取所有已上传文件列表")
-async def list_files(db: Session = Depends(get_db)):
-    """获取所有已上传文件的信息列表"""
-    files = db.query(UploadedFile).order_by(UploadedFile.upload_time.desc()).all()
+async def list_files(
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = Depends(_get_current_user_id),
+):
+    """获取当前用户已上传文件的信息列表"""
+    query = db.query(UploadedFile)
+    if user_id:
+        query = query.filter(UploadedFile.user_id == user_id)
+    files = query.order_by(UploadedFile.upload_time.desc()).all()
     return {
         "total": len(files),
         "files": [
@@ -148,3 +170,54 @@ async def get_file_info(file_id: str, db: Session = Depends(get_db)):
         "row_count": info_data["rows"],
         "column_count": info_data["columns"],
     })
+
+
+@router.delete("/upload/{file_id}", summary="删除上传文件")
+async def delete_file(
+    file_id: str,
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = Depends(_get_current_user_id),
+):
+    """删除指定文件及其关联数据"""
+    record = db.query(UploadedFile).filter(UploadedFile.file_id == file_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    # 删除磁盘文件
+    for path in [record.file_path, record.cleaned_path]:
+        if path and os.path.exists(path):
+            try:
+                os.remove(path)
+            except OSError as e:
+                logger.warning(f"删除文件失败: {path} - {e}")
+
+    # 清除缓存
+    DataService._data_cache.pop(file_id, None)
+    cleaned_id = f"{file_id}_cleaned"
+    DataService._data_cache.pop(cleaned_id, None)
+
+    # 删除数据库记录
+    db.delete(record)
+    db.commit()
+
+    logger.info(f"文件已删除: {record.filename} (ID: {file_id})")
+    return {"message": "文件已删除", "file_id": file_id}
+
+
+@router.get("/upload/{file_id}/download", summary="下载原始文件")
+async def download_file(file_id: str, db: Session = Depends(get_db)):
+    """下载指定文件的原始数据"""
+    record = db.query(UploadedFile).filter(UploadedFile.file_id == file_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    file_path = record.cleaned_path or record.file_path
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="文件已从磁盘删除")
+
+    download_name = record.filename.rsplit(".", 1)[0] + "_data.csv"
+    return FileResponse(
+        path=file_path,
+        filename=download_name,
+        media_type="text/csv",
+    )

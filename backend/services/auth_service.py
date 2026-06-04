@@ -118,6 +118,13 @@ def login_user(db: Session, username: str, password: str, remember: bool = False
     if expected_hash != user.password_hash:
         raise ValueError("用户名或密码错误")
 
+    # 顶号：删除该用户所有旧会话
+    deleted_count = db.query(UserSession).filter(
+        UserSession.user_id == user.id
+    ).delete()
+    if deleted_count > 0:
+        logger.info(f"已踢出用户 {username} 的 {deleted_count} 个旧会话")
+
     # 创建新会话
     token = _generate_token()
     expire_days = SESSION_EXPIRE_DAYS_REMEMBER if remember else SESSION_EXPIRE_DAYS
@@ -136,9 +143,11 @@ def login_user(db: Session, username: str, password: str, remember: bool = False
     }
 
 
-def recover_password(db: Session, username: str) -> dict:
+def recover_password(db: Session, username: str, new_password: str = None) -> dict:
     """
     通过用户名找回密码
+    - 如果提供 new_password，使用用户自定义的密码
+    - 否则生成随机密码
     返回 {"username": str, "password_hint": str}
 
     Raises:
@@ -148,11 +157,14 @@ def recover_password(db: Session, username: str) -> dict:
     if not user:
         raise ValueError(f"用户 '{username}' 不存在")
 
-    # 生成一个新密码（取用户名前2字符 + 随机6位）
-    new_password = user.username[:2] + secrets.token_hex(3)
+    # 使用用户提供的密码或生成随机密码
+    if new_password:
+        password_to_set = new_password
+    else:
+        password_to_set = user.username[:2] + secrets.token_hex(3)
 
     # 更新密码哈希
-    password_hash, salt = _hash_password(new_password)
+    password_hash, salt = _hash_password(password_to_set)
     user.password_hash = password_hash
     user.salt = salt
     db.commit()
@@ -160,7 +172,7 @@ def recover_password(db: Session, username: str) -> dict:
     logger.info(f"密码重置: {username} (ID: {user.id})")
     return {
         "username": username,
-        "password_hint": new_password,
+        "password_hint": password_to_set,
     }
 
 

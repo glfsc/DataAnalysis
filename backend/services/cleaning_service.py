@@ -2,6 +2,7 @@
 数据清洗服务
 处理缺失值、重复值、异常值检测和数据类型转换
 """
+import math
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,7 +19,7 @@ class CleaningService:
     """数据清洗服务类：提供全面的数据清洗功能"""
 
     @classmethod
-    def clean_data(cls, df: pd.DataFrame, params: CleaningParams) -> Tuple[pd.DataFrame, CleaningSummary]:
+    def clean_data(cls, df: pd.DataFrame, params: CleaningParams) -> Tuple[pd.DataFrame, CleaningSummary, Dict[str, Any]]:
         """
         根据清洗参数清洗数据
 
@@ -27,9 +28,15 @@ class CleaningService:
             params: 清洗参数配置
 
         Returns:
-            (清洗后的DataFrame, 清洗统计摘要)
+            (清洗后的DataFrame, 清洗统计摘要, 删除行详情)
         """
         original_rows = len(df)
+        deleted_rows_info = {
+            "missing_rows": [],      # 因缺失值被删除的行（原始索引+行数据）
+            "duplicate_rows": [],    # 被删除的重复行（原始索引+行数据）
+            "total_deleted": 0,
+        }
+
         summary = CleaningSummary(
             original_rows=original_rows,
             cleaned_rows=original_rows,
@@ -43,14 +50,52 @@ class CleaningService:
 
         # 1. 处理缺失值
         if params.handle_missing and params.handle_missing != "none":
-            df_clean, missing_count = cls._handle_missing_values(
-                df_clean, params.handle_missing, params.columns_to_clean
-            )
-            summary.missing_handled = missing_count
+            if params.handle_missing == "delete":
+                # 记录被删除的行（含缺失值的行）
+                target_cols = params.columns_to_clean or df_clean.columns.tolist()
+                missing_mask = df_clean[target_cols].isnull().any(axis=1)
+                deleted_indices = df_clean.index[missing_mask].tolist()
+                for idx in deleted_indices:
+                    row_data = df_clean.loc[idx].to_dict()
+                    # 转换不可序列化的值
+                    for k, v in row_data.items():
+                        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                            row_data[k] = None
+                        elif hasattr(v, 'item'):
+                            row_data[k] = v.item()
+                    deleted_rows_info["missing_rows"].append({
+                        "original_index": int(idx) if not isinstance(idx, (int, np.integer)) else int(idx),
+                        "reason": "含缺失值",
+                        "data": row_data,
+                    })
+                before = len(df_clean)
+                df_clean, missing_count = cls._handle_missing_values(
+                    df_clean, params.handle_missing, params.columns_to_clean
+                )
+                summary.missing_handled = missing_count
+            else:
+                df_clean, missing_count = cls._handle_missing_values(
+                    df_clean, params.handle_missing, params.columns_to_clean
+                )
+                summary.missing_handled = missing_count
 
         # 2. 删除重复值
         if params.drop_duplicates:
             before = len(df_clean)
+            dup_mask = df_clean.duplicated(keep='first')
+            dup_indices = df_clean.index[dup_mask].tolist()
+            for idx in dup_indices:
+                row_data = df_clean.loc[idx].to_dict()
+                for k, v in row_data.items():
+                    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                        row_data[k] = None
+                    elif hasattr(v, 'item'):
+                        row_data[k] = v.item()
+                deleted_rows_info["duplicate_rows"].append({
+                    "original_index": int(idx) if not isinstance(idx, (int, np.integer)) else int(idx),
+                    "reason": "重复行",
+                    "data": row_data,
+                })
             df_clean = df_clean.drop_duplicates()
             summary.duplicates_removed = before - len(df_clean)
 
@@ -77,6 +122,7 @@ class CleaningService:
             summary.outliers_detected = int(outlier_mask.any(axis=1).sum())
 
         summary.cleaned_rows = len(df_clean)
+        deleted_rows_info["total_deleted"] = summary.duplicates_removed + (summary.missing_handled if params.handle_missing == "delete" else 0)
 
         logger.info(
             f"数据清洗完成: {original_rows}行 → {summary.cleaned_rows}行, "
@@ -85,7 +131,7 @@ class CleaningService:
             f"检测异常值{summary.outliers_detected}个"
         )
 
-        return df_clean, summary
+        return df_clean, summary, deleted_rows_info
 
     @classmethod
     def _handle_missing_values(

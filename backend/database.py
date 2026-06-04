@@ -49,8 +49,31 @@ def get_db():
 
 
 def init_db():
-    """初始化数据库表结构"""
+    """初始化数据库表结构（含自动迁移）"""
     from models.database_models import (  # noqa: F401
-        UploadedFile, AnalysisResult, ChartConfig, User, UserSession
+        UploadedFile, AnalysisResult, ChartConfig, User, UserSession, AIConfig
     )
     Base.metadata.create_all(bind=engine)
+
+    # 自动迁移：为已有 uploaded_files 表添加 user_id 列
+    _migrate_add_column("uploaded_files", "user_id", "INTEGER")
+
+
+def _migrate_add_column(table_name: str, column_name: str, column_type: str):
+    """安全地添加列（如果不存在）"""
+    import sqlite3
+    try:
+        conn = engine.raw_connection()
+        cursor = conn.cursor()
+        # 检查列是否存在
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = [row[1] for row in cursor.fetchall()]
+        if column_name not in columns:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+            conn.commit()
+            import logging
+            logging.getLogger(__name__).info(f"数据库迁移: {table_name} 添加列 {column_name}")
+        cursor.close()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"数据库迁移警告 ({table_name}.{column_name}): {e}")

@@ -49,6 +49,7 @@ class UploadedFile(Base):
     upload_time = Column(DateTime, default=datetime.utcnow, comment="上传时间")
     is_cleaned = Column(Boolean, default=False, comment="是否已清洗")
     cleaned_path = Column(String(500), nullable=True, comment="清洗后文件路径")
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True, comment="上传用户ID")
 
 
 class AnalysisResult(Base):
@@ -74,3 +75,18 @@ class ChartConfig(Base):
     title = Column(String(255), nullable=False, comment="图表标题")
     config = Column(JSON, default=dict, comment="ECharts配置")
     created_time = Column(DateTime, default=datetime.utcnow, comment="创建时间")
+
+
+class AIConfig(Base):
+    """AI模型配置表"""
+    __tablename__ = "ai_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, comment="用户ID")
+    name = Column(String(100), nullable=False, comment="配置方案名称")
+    api_key = Column(String(500), nullable=False, comment="API Key")
+    base_url = Column(String(500), nullable=False, comment="API地址URL")
+    model_name = Column(String(200), nullable=False, comment="模型名称")
+    is_enabled = Column(Boolean, default=False, comment="是否启用（同一用户只能启用一个）")
+    created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")

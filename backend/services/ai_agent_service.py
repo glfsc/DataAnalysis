@@ -1,7 +1,9 @@
 """
 AI智能分析助手服务
 提供自然语言交互、自动洞察发现、智能图表推荐和数据故事生成
+支持用户配置的 LLM API（OpenAI 兼容接口）
 """
+import json
 import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,7 +18,97 @@ logger = logging.getLogger(__name__)
 
 
 class AIAgentService:
-    """AI智能助手服务类：规则匹配 + 模板驱动的智能分析"""
+    """AI智能助手服务类：规则匹配 + LLM 驱动的智能分析"""
+
+    @classmethod
+    async def process_query_with_llm(
+        cls,
+        query: str,
+        df: pd.DataFrame,
+        ai_config: Dict[str, Any],
+        context: Optional[Dict] = None,
+    ) -> Dict[str, Any]:
+        """
+        使用用户配置的 LLM API 处理查询
+
+        Args:
+            query: 用户查询文本
+            df: 当前数据DataFrame
+            ai_config: AI配置（api_key, base_url, model_name）
+            context: 上下文信息
+
+        Returns:
+            包含回答和建议的字典
+        """
+        import httpx
+
+        # 准备数据摘要
+        num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+        data_summary = f"""
+数据集信息:
+- 行数: {len(df)}
+- 列数: {len(df.columns)}
+- 列名: {', '.join(df.columns.tolist())}
+- 数值列: {', '.join(num_cols) if num_cols else '无'}
+- 分类列: {', '.join(cat_cols) if cat_cols else '无'}
+
+数据预览(前5行):
+{df.head(5).to_string()}
+
+数值列统计:
+{df[num_cols].describe().to_string() if num_cols else '无数值列'}
+"""
+
+        system_prompt = """你是一个数据分析助手，帮助用户分析数据。你需要：
+1. 用中文回答用户的问题
+2. 基于提供的数据给出准确的分析
+3. 如果用户询问统计信息，计算并给出具体数值
+4. 如果问题无法从数据中回答，诚实地告诉用户
+5. 回答要简洁、专业、有帮助"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"数据信息:\n{data_summary}\n\n用户问题: {query}"},
+        ]
+
+        try:
+            base_url = ai_config["base_url"].rstrip("/")
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {ai_config['api_key']}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": ai_config["model_name"],
+                        "messages": messages,
+                        "temperature": 0.7,
+                        "max_tokens": 2000,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                reply = data["choices"][0]["message"]["content"]
+
+                return {
+                    "reply": reply,
+                    "suggested_action": None,
+                    "chart_data": None,
+                    "insights": [],
+                }
+        except Exception as e:
+            logger.error(f"LLM API 调用失败: {str(e)}")
+            # 回退到规则引擎
+            logger.info("回退到规则引擎处理查询")
+            result = cls.process_query(query, df, context)
+            return {
+                "reply": f"⚠️ AI模型调用失败（{str(e)}），使用内置分析引擎:\n\n{result.get('answer', '')}",
+                "suggested_action": result.get("suggested_action"),
+                "chart_data": result.get("chart_recommendation"),
+                "insights": result.get("insights", []),
+            }
 
     # 常见问题模式库
     QUERY_PATTERNS = [

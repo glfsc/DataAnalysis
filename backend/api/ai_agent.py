@@ -4,12 +4,12 @@ AI智能助手API路由
 import logging
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
 from database import get_db
-from models.database_models import UploadedFile
+from models.database_models import UploadedFile, AIConfig
 from services.data_service import DataService
 from services.ai_agent_service import AIAgentService
 
@@ -22,6 +22,20 @@ class AIAskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=500, description="用户问题")
     file_id: Optional[str] = Field(None, description="关联文件ID")
     context: Optional[Dict[str, Any]] = Field(None, description="上下文")
+
+
+def _get_current_user_id(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> Optional[int]:
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "").strip()
+    if not token:
+        return None
+    from services.auth_service import get_current_user
+    user = get_current_user(db, token)
+    return user.id if user else None
 
 
 def _load_df(file_id: str, db: Session):
@@ -38,8 +52,12 @@ def _load_df(file_id: str, db: Session):
 
 
 @router.post("/query", summary="AI自然语言查询")
-async def ai_query(request: AIAskRequest, db: Session = Depends(get_db)):
-    """使用自然语言查询数据"""
+async def ai_query(
+    request: AIAskRequest,
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = Depends(_get_current_user_id),
+):
+    """使用自然语言查询数据（优先使用用户配置的LLM）"""
     df = None
     if request.file_id:
         df = _load_df(request.file_id, db)
@@ -47,12 +65,36 @@ async def ai_query(request: AIAskRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="文件不存在")
 
     try:
+        # 检查用户是否有启用的AI配置
+        ai_config = None
+        if user_id:
+            config_record = db.query(AIConfig).filter(
+                AIConfig.user_id == user_id,
+                AIConfig.is_enabled == True,
+            ).first()
+            if config_record:
+                ai_config = {
+                    "api_key": config_record.api_key,
+                    "base_url": config_record.base_url,
+                    "model_name": config_record.model_name,
+                }
+
         if df is not None:
-            result = AIAgentService.process_query(
-                query=request.question,
-                df=df,
-                context=request.context,
-            )
+            if ai_config:
+                # 使用用户配置的LLM
+                result = await AIAgentService.process_query_with_llm(
+                    query=request.question,
+                    df=df,
+                    ai_config=ai_config,
+                    context=request.context,
+                )
+            else:
+                # 使用内置规则引擎
+                result = AIAgentService.process_query(
+                    query=request.question,
+                    df=df,
+                    context=request.context,
+                )
         else:
             # 无文件时返回通用回复
             result = {

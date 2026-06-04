@@ -258,6 +258,7 @@ class LoginRequest(BaseModel):
 class RecoverRequest(BaseModel):
     """密码找回请求"""
     username: str = Field(..., min_length=1, description="用户名")
+    new_password: Optional[str] = Field(None, min_length=6, max_length=100, description="自定义新密码")
 
 
 class UpdateUserRequest(BaseModel):
